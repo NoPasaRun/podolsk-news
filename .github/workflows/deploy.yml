@@ -1,0 +1,48 @@
+name: Deploy (pull+make prod-up)
+
+on:
+  push:
+    branches: [ "master" ]
+
+concurrency:
+  group: deploy-master
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Pull & restart on server
+        run: |
+          ssh -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}" <<'EOF'
+set -euo pipefail
+
+cd "${{ secrets.PROD_PROJECT_DIR }}"
+
+# Убедимся, что репозиторий чистый (без локальных мусорных изменений)
+git reset --hard
+
+# Переключаемся на master и подтягиваем последние коммиты
+git fetch --prune
+git checkout master
+git pull --ff-only
+
+# Опционально обновить образы (если в compose указаны образа из реестра)
+# docker compose pull || true
+
+# Запуск твоей цели
+make prod-up
+
+# Можно посмотреть статусы контейнеров
+docker compose ps
+EOF

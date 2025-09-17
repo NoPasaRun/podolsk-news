@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "news-backend"
+version = "0.1.0"
+description = "Podolsk news API"
+authors = ["Bogdan <bogdanbelenesku@gmail.com>"]
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.115.0"
+uvicorn = {extras=["standard"], version="^0.30.6"}
+feedparser = "^6.0.11"
+trafilatura = "^1.12.2"
+readability-lxml = "^0.8.1"
+sumy = "^0.11.0"
+redis = "^5.0.8"
+psycopg = {version="^3.2.1", extras=["binary"]}
+pydantic = "^2.9.2"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.2"
+ruff = "^0.6.8"
+
+[tool.ruff]
+line-length = 100

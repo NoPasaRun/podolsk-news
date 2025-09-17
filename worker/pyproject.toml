@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "news-backend"
+version = "0.1.0"
+description = "Podolsk news API"
+authors = ["Bogdan <bogdanbelenesku@gmail.com>"]
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+apscheduler = "^3.10.4"
+psycopg = {version="^3.2.1", extras=["binary"]}
+redis = "^5.0.8"
+python-dotenv = "^1.0.1"
+requests = "^2.32.3"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.6.8"

@@ -5,7 +5,7 @@ app = FastAPI(title="News API")
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "ts": datetime.utcnow().isoformat()}
+    return {"ok": False, "ts": datetime.utcnow().isoformat()}
 
 @app.get("/api/news")
 def news():

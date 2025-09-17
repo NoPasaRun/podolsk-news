@@ -29,9 +29,8 @@ services:
       SUMMARIZER_MODEL: ${SUMMARIZER_MODEL}
     volumes:
       - ./backend/src:/app/src:rw
-    command: >
-      bash -lc "poetry run uvicorn src.app.main:app
-      --host 0.0.0.0 --port ${API_PORT} --reload"
+    ports:
+      - "${BACKEND_HOST_PORT}:8000"
     depends_on:
       db:
         condition: service_healthy

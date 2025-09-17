@@ -5,16 +5,25 @@ ifneq (,$(wildcard .env))
 endif
 
 # -------- Defaults (fallbacks if .env is missing) --------
-PROJECT      ?= my-news
-SERVER_NAME  ?= news.example.com
-FRONT_ROOT   ?= /srv/apps/$(PROJECT)/frontend_dist
-API_UPSTREAM ?= 127.0.0.1:8000
-DEV          ?= dev
+POSTGRES_USER	?=	postgres
+POSTGRES_PASSWORD	?=	password
+POSTGRES_DB	?=	postgres
+REDIS_URL	?=	redis://redis:6379/0
+PUBLIC_ORIGIN	?=	http://localhost
+SUMMARIZER_MODEL	?=	textrank
+VITE_API_BASE	?=	/api
+
+PROJECT	?=	podolsk-news
+SERVER_NAME	?=	localhost
+FRONT_ROOT	?=	/var/www/html
+BACKEND_HOST_PORT	?=	8000
+DEV	?=	dev
+
 
 # -------- Phony targets --------
-.PHONY: dev-up dev-down logs-be be sh-be sh-fe \
+.PHONY: dev-up dev-down logs-be sh-be sh-fe \
         prod-up prod-down prod-logs fe-build \
-        prod-nginx prod-nginx-disable prod-nginx-reload ips
+        prod-nginx-disable prod-nginx-enable prod-nginx-cert ips
 
 # -------- DEV (docker nginx + vite) --------
 ips:
@@ -28,9 +37,6 @@ dev-down:
 
 logs-be:
 	docker compose logs -f backend
-
-be:
-	curl -s http://localhost/api/health | jq .
 
 sh-be:
 	docker compose exec backend bash
@@ -46,27 +52,21 @@ prod-down:
 	docker compose down
 
 prod-logs:
-	docker compose logs -f
+	sudo journalctl -u nginx -f
 
 # Собрать фронт и выложить статику в $(FRONT_ROOT)
 fe-build:
 	cd frontend && npm ci && npm run build
-	@echo "→ syncing frontend/dist → $(FRONT_ROOT)"
-	sudo mkdir -p "$(FRONT_ROOT)"
-	# аккуратно очистим только содержимое каталога
-	sudo bash -lc 'shopt -s dotglob nullglob; rm -rf "$(FRONT_ROOT)"/*'
-	sudo cp -a frontend/dist/. "$(FRONT_ROOT)/"
 	@echo "✔ FRONT_ROOT updated: $(FRONT_ROOT)"
 
 # Включить сайт в системном nginx (использует deploy/nginx/*.conf из проекта)
-prod-nginx:
-	SERVER_NAME="$(SERVER_NAME)" FRONT_ROOT="$(FRONT_ROOT)" API_UPSTREAM="$(API_UPSTREAM)" \
+prod-nginx-enable:
 	./scripts/nginx_enable_prod.sh "$(PROJECT)"
 
 # Отключить сайт в системном nginx
 prod-nginx-disable:
 	./scripts/nginx_disable_prod.sh "$(PROJECT)"
 
-# Проверка и reload nginx (хостовой)
-prod-nginx-reload:
-	sudo nginx -t && sudo systemctl reload nginx
+# Установка сертификата
+prod-nginx-cert:
+	sudo certbot --nginx -d "$(SERVER_NAME)" --email example@gmail.com --agree-tos --redirect

@@ -30,13 +30,20 @@ jobs:
       - name: Pull & make prod-up on server
         shell: bash
         run: |
-          ssh -p "${SSH_PORT:-22}" "${USER}@${HOST}" bash -lc '
-            set -euo pipefail
-            cd "${PROJECT_DIR}"
-            git reset --hard
-            git fetch --prune
-            git checkout master
-            git pull --ff-only
-            make prod-up
-            docker compose ps
-          '
+          # проверим, что переменные заданы
+          : "${HOST:?SECRET PROD_HOST is empty}"
+          : "${USER:?SECRET PROD_USER is empty}"
+          : "${PROJECT_DIR:?SECRET PROD_PROJECT_DIR is empty}"
+          PORT="${SSH_PORT:-22}"
+
+          # выполняем, подставляя значения на локальной стороне (двойные кавычки снаружи)
+          ssh -p "$PORT" "${USER}@${HOST}" "bash -lc 'set -euo pipefail; \
+            cd \"${PROJECT_DIR}\"; \
+            git reset --hard; \
+            git fetch --prune; \
+            git checkout master; \
+            git pull --ff-only; \
+            make fe-build; \
+            make prod-up; \
+            make prod-nginx-enable; \
+            docker compose ps'"

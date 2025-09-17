@@ -11,6 +11,11 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.PROD_HOST }}
+      USER: ${{ secrets.PROD_USER }}
+      SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+      PROJECT_DIR: ${{ secrets.PROD_PROJECT_DIR }}
     steps:
       - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
@@ -20,29 +25,18 @@ jobs:
       - name: Add server to known_hosts
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${SSH_PORT:-22}" "${HOST}" >> ~/.ssh/known_hosts
 
-      - name: Pull & restart on server
+      - name: Pull & make prod-up on server
+        shell: bash
         run: |
-          ssh -p "${{ secrets.PROD_SSH_PORT }}" "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}" <<'EOF'
-set -euo pipefail
-
-cd "${{ secrets.PROD_PROJECT_DIR }}"
-
-# Убедимся, что репозиторий чистый (без локальных мусорных изменений)
-git reset --hard
-
-# Переключаемся на master и подтягиваем последние коммиты
-git fetch --prune
-git checkout master
-git pull --ff-only
-
-# Опционально обновить образы (если в compose указаны образа из реестра)
-# docker compose pull || true
-
-# Запуск твоей цели
-make prod-up
-
-# Можно посмотреть статусы контейнеров
-docker compose ps
-EOF
+          ssh -p "${SSH_PORT:-22}" "${USER}@${HOST}" bash -lc '
+            set -euo pipefail
+            cd "${PROJECT_DIR}"
+            git reset --hard
+            git fetch --prune
+            git checkout master
+            git pull --ff-only
+            make prod-up
+            docker compose ps
+          '

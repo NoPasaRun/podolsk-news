@@ -16,7 +16,7 @@ VITE_API_BASE	?=	/api
 PROJECT	?=	podolsk-news
 SERVER_NAME	?=	localhost
 FRONT_ROOT	?=	/var/www/html
-BACKEND_HOST_PORT	?=	8000
+BACKEND_HOST_PORT	?=	8080
 DEV	?=	dev
 
 

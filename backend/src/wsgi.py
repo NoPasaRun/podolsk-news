@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from orm.db import init_db, close_db
 from routes.auth import router as auth_router
+from routes.news import router as news_router
 from settings import settings
 
 from fastapi.openapi.utils import get_openapi
@@ -52,3 +53,4 @@ app = FastAPI(
 )
 app.openapi = custom_openapi
 app.include_router(auth_router)
+app.include_router(news_router)

@@ -6,7 +6,7 @@ from schemes.auth import PhoneIn, VerifyIn
 from settings import settings
 from utils.auth import make_tokens, gen_code, hash_code
 
-router = APIRouter(prefix="/auth/phone", tags=["auth:phone"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def send_sms(phone: str, text: str) -> None:

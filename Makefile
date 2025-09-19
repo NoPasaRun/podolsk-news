@@ -17,7 +17,7 @@ PROJECT	?=	podolsk-news
 SERVER_NAME	?=	localhost
 FRONT_ROOT	?=	/var/www/html
 BACKEND_HOST_PORT	?=	8080
-DEV	?=	dev
+ENV	?=	dev
 
 
 # -------- Phony targets --------
@@ -25,15 +25,15 @@ DEV	?=	dev
         prod-up prod-down prod-logs fe-build \
         prod-nginx-disable prod-nginx-enable prod-nginx-cert ips
 
-# -------- DEV (docker nginx + vite) --------
+# -------- ENV (docker nginx + vite) --------
 ips:
 	@docker compose ps -q | xargs docker inspect -f '{{.Name}} -> {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'
 
 dev-up:
-	docker compose --profile $(DEV) up -d --build
+	docker compose --profile $(ENV) up -d --build
 
 dev-down:
-	docker compose --profile $(DEV) down
+	docker compose --profile $(ENV) down
 
 logs-be:
 	docker compose logs -f backend

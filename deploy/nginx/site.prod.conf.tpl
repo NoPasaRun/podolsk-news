@@ -45,12 +45,13 @@ server {
   # ---- API → backend (loopback, без наружного порта) ----
   # Поменяй порт на тот, что проброшен из compose на 127.0.0.1
   location /api/ {
-    proxy_pass http://127.0.0.1:{{BACKEND_HOST_PORT}};   # <-- твой BACKEND_HOST_PORT
+    proxy_pass http://127.0.0.1:{{BACKEND_HOST_PORT}}/;   # <-- твой BACKEND_HOST_PORT
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Prefix /api;
   }
 
   # gzip (бонус)

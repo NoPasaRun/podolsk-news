@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from orm.db import init_db, close_db
 from routes.auth import router as auth_router
 from routes.news import router as news_router
+from routes.user import router as user_router
 from settings import settings
 
 from fastapi.openapi.utils import get_openapi
@@ -26,12 +27,6 @@ def custom_openapi():
         routes=app.routes,
         description="API docs",
     )
-    openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})["bearerAuth"] = {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT",
-    }
-    openapi_schema["security"] = [{"bearerAuth": []}]
     openapi_schema["servers"] = [{"url": "/api"}]
 
     app.openapi_schema = openapi_schema
@@ -54,3 +49,4 @@ app = FastAPI(
 app.openapi = custom_openapi
 app.include_router(auth_router)
 app.include_router(news_router)
+app.include_router(user_router)

@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react'
-import { fetchNews } from './api'
+import React, { useEffect, useState } from 'react'
 import NewsList from './components/NewsList'
 import NewsFilters from './components/NewsFilters'
-import AuthPopup from './components/AuthPopup'
+import AuthPopup from './auth/AuthPopup'
 import ThemeToggle from './components/ThemeToggle'
+import {useAuth} from "./auth/AuthProvider.jsx";
+import './index.css'
 
 export default function App() {
   const [news, setNews] = useState([])
@@ -12,17 +13,16 @@ export default function App() {
 
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('newest')
-  const [showAuth, setShowAuth] = useState(true)
+
+  const { api, openLogin, closeLogin, showLogin, isAuthed  } = useAuth();
   const [theme, setTheme] = useState('light')
 
   // загрузка новостей
   useEffect(() => {
-    let alive = true
-    fetchNews()
-      .then((data) => { if (alive) setNews(Array.isArray(data) ? data : (data.items || [])) })
-      .catch((e) => { if (alive) setError(e?.message || 'Ошибка'); console.error(e) })
-      .finally(() => { if (alive) setLoading(false) })
-    return () => { alive = false }
+    api.get("/news/list")
+      .then(r => r.json().then(setNews) )
+      .catch((e) => { setError(e?.message || 'Ошибка'); console.error(e) })
+      .finally(() => { setLoading(false) })
   }, [])
 
   // тема (persist)
@@ -37,30 +37,17 @@ export default function App() {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
 
-  const filtered = useMemo(() => {
-    const bySearch = (n) => {
-      const q = search.trim().toLowerCase()
-      if (!q) return true
-      return (
-        n.title?.toLowerCase().includes(q) ||
-        n.description?.toLowerCase().includes(q) ||
-        n.author?.toLowerCase().includes(q)
-      )
-    }
-    const arr = (news || []).filter(bySearch)
-    if (sort === 'newest') arr.sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
-    if (sort === 'oldest') arr.sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
-    if (sort === 'author') arr.sort((a,b) => (a.author || '').localeCompare(b.author || ''))
-    return arr
-  }, [news, search, sort])
-
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <header className="flex justify-between items-center px-6 py-4 shadow bg-white dark:bg-gray-800">
         <h1 className="text-2xl font-bold">📰 Новости</h1>
         <div className="flex items-center gap-3">
           <ThemeToggle theme={theme} setTheme={setTheme} />
-          <button className="btn-secondary" onClick={() => setShowAuth(true)}>Войти</button>
+          {
+            !isAuthed ? (
+                <button className="btn-secondary" onClick={openLogin}>Войти</button>
+            ) : <></>
+          }
         </div>
       </header>
 
@@ -80,10 +67,10 @@ export default function App() {
           </div>
         )}
         {error && <div className="text-center text-red-500 mb-4">Ошибка: {error}</div>}
-        {!loading && !error && <NewsList news={filtered} />}
+        {!loading && !error && <NewsList news={news} />}
       </main>
 
-      {showAuth && <AuthPopup onClose={() => setShowAuth(false)} />}
+      {showLogin && <AuthPopup onClose={closeLogin} />}
     </div>
   )
 }

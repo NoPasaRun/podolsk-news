@@ -2,17 +2,17 @@ from datetime import timedelta, timezone, datetime
 from fastapi import APIRouter, HTTPException
 
 from orm.models import User, PhoneOTP
-from schemes.auth import PhoneIn, VerifyIn
+from schemes.auth import PhoneIn, VerifyIn, RefreshIn, TokenPair
 from settings import settings
-from utils.auth import make_tokens, gen_code, hash_code
+from utils.auth import make_token, gen_code, hash_code, decode_refresh_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def send_sms(phone: str, text: str) -> None:
+async def send_sms(phone: str, text: str) -> bool:
     if settings.app.debug:
-        return print(f"[DEV SMS] {phone}: {text}")
-    pass
+        return not print(f"[DEV SMS] {phone}: {text}")
+    return False
 
 
 @router.post("/request")
@@ -42,12 +42,12 @@ async def request_code(body: PhoneIn):
             last_sent_at=now_utc,
         )
 
-    send_sms(phone, f"Ваш код: {code}")
-    return {"ok": True}
+    response = await send_sms(phone, f"Ваш код: {code}")
+    return {"ok": response}
 
 
 @router.post("/verify")
-async def verify_code(body: VerifyIn):
+async def verify_code(body: VerifyIn) -> TokenPair:
     phone, code, now_utc = body.phone, body.code, datetime.now(timezone.utc)
     otp = await PhoneOTP.get_or_none(phone=phone)
     if not otp:
@@ -72,5 +72,31 @@ async def verify_code(body: VerifyIn):
     if not user:
         user = await User.create(phone=phone, phone_verified_at=now_utc)
 
-    tokens = make_tokens({"sub": user.id})
-    return tokens
+    payload = {"sub": str(user.id)}
+    return TokenPair(
+        access=make_token(payload, "access"),
+        refresh=make_token(payload, "refresh"),
+    )
+
+
+@router.post("/refresh")
+async def refresh_token(body: RefreshIn) -> TokenPair:
+    try:
+        payload = decode_refresh_token(body.refresh)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+    sub = payload.get("sub")
+    if not sub and not sub.isdigit():
+        raise HTTPException(status_code=401, detail="invalid token payload")
+
+    user = await User.get_or_none(id=int(sub))
+    if not user:
+        raise HTTPException(status_code=401, detail="user not found")
+
+    payload = {"sub": str(user.id)}
+    return TokenPair(
+        access=make_token(payload, "access"),
+        refresh=body.refresh,
+    )
+

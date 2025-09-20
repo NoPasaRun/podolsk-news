@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 
 from tortoise import fields
+from tortoise.indexes import Index
 from tortoise.models import Model
 
 from settings import settings
+from utils.enums import SourceKind, SourceStatus, UserSourceStatus, RawContentType, Language, TopicKind
 
 
 class User(Model):
@@ -37,3 +39,156 @@ class PhoneOTP(Model):
     class Meta:
         table = "phone_otps"
         indexes = (("phone",),)
+
+
+class Source(Model):
+    """
+    kind задаёт тип источника (rss/html/jsonfeed/telegram).
+    parser_profile выбирает стратегию парсинга.
+    parse_overrides — ручные селекторы/правила для конкретного домена.
+    """
+    id = fields.IntField(pk=True)
+    kind = fields.CharEnumField(SourceKind, max_length=16)
+    domain = fields.CharField(max_length=255, index=True)
+    status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.ACTIVE)
+    parser_profile = fields.CharField(max_length=32, null=True)
+    parse_overrides = fields.JSONField(null=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("kind", "domain"),)
+
+
+class UserSource(Model):
+    """
+    Подключение источника пользователем.
+    rank — приоритет этого источника.
+    """
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField("models.User", related_name="user_sources", on_delete=fields.CASCADE)
+    source = fields.ForeignKeyField("models.Source", related_name="user_sources", on_delete=fields.CASCADE)
+    status = fields.CharEnumField(UserSourceStatus, max_length=16, default=UserSourceStatus.VALIDATING)
+    poll_interval_sec = fields.IntField(default=900)
+    rank = fields.IntField(default=0)
+    labels = fields.JSONField(default=list)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (("user", "source"),)
+
+
+class RowData(Model):
+    """
+    Снимок скачанного ресурса.
+    url_original — ссылка из фида/листинга.
+    url_canon — канонизированный URL для дедупа.
+    raw_content — тело ответа.
+    raw_content_type — html/json/text.
+    raw_hash — контрольная сумма (для поиска дублей).
+    """
+    id = fields.IntField(pk=True)
+    source = fields.ForeignKeyField("models.Source", related_name="ingest_events", on_delete=fields.CASCADE)
+    url_original = fields.TextField()
+    url_canon = fields.CharField(null=True, max_length=4096, index=True)
+    fetched_at = fields.DatetimeField(auto_now_add=True, index=True)
+    raw_content = fields.TextField(null=True)
+    raw_content_type = fields.CharEnumField(RawContentType, max_length=8, default=RawContentType.HTML)
+    raw_hash = fields.CharField(max_length=64, null=True, index=True)
+
+    class Meta:
+        indexes = [
+            Index(fields=("source_id", "fetched_at")),
+            Index(fields=("url_canon",)),
+            Index(fields=("raw_hash",)),
+        ]
+
+
+class Cluster(Model):
+    """
+    Инфоповод = группа похожих статей.
+    summary — краткий анонс/описание.
+    weight — «популярность» (кол-во источников, свежесть, клики).
+    """
+    id = fields.IntField(pk=True)
+    title = fields.TextField()
+    summary = fields.TextField(null=True)
+    top_image = fields.TextField(null=True)
+    first_published_at = fields.DatetimeField(index=True)
+    last_updated_at = fields.DatetimeField(auto_now=True, index=True)
+    language = fields.CharEnumField(Language, max_length=8, default=Language.AUTO)
+    weight = fields.IntField(default=0)
+
+    class Meta:
+        indexes = [
+            Index(fields=("first_published_at",)),
+            Index(fields=("last_updated_at",)),
+            Index(fields=("weight",)),
+        ]
+
+
+class Article(Model):
+    """
+    Нормализованный документ для выдачи.
+    content_html — очищенный текст/HTML.
+    content_fingerprint — simhash/minhash для дедупа.
+    """
+    id = fields.IntField(pk=True)
+    source = fields.ForeignKeyField("models.Source", related_name="articles", on_delete=fields.CASCADE)
+    cluster = fields.ForeignKeyField("models.Cluster", related_name="articles", on_delete=fields.CASCADE)
+    url = fields.TextField()
+    url_canon = fields.CharField(null=True, max_length=4096, index=True)
+    title = fields.TextField()
+    summary = fields.TextField(null=True)
+    content_html = fields.TextField(null=True)
+    published_at = fields.DatetimeField(index=True)
+    language = fields.CharEnumField(Language, max_length=8, default=Language.AUTO)
+    content_fingerprint = fields.CharField(max_length=64, null=True, index=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            Index(fields=("cluster_id", "published_at")),
+            Index(fields=("source_id", "published_at")),
+            Index(fields=("url_canon",)),
+        ]
+        unique_together = (("source", "url"),)
+
+
+class UserArticleState(Model):
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField("models.User", related_name="article_states", on_delete=fields.CASCADE)
+    cluster = fields.ForeignKeyField("models.Cluster", related_name="user_states", on_delete=fields.CASCADE)
+    read = fields.BooleanField(default=False)
+    bookmarked = fields.BooleanField(default=False)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("user", "cluster"),)
+
+
+class Topic(Model):
+    id = fields.IntField(pk=True)
+    code = fields.CharEnumField(TopicKind, max_length=32, unique=True)
+    title = fields.CharField(max_length=128)
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+
+class ClusterTopic(Model):
+    """M2M с весом/уверенностью классификатора"""
+    id = fields.IntField(pk=True)
+    cluster = fields.ForeignKeyField("models.Cluster", related_name="cluster_topics", on_delete=fields.CASCADE)
+    topic = fields.ForeignKeyField("models.Topic", related_name="cluster_topics", on_delete=fields.CASCADE)
+    score = fields.FloatField(default=0.0)
+    primary = fields.BooleanField(default=False)
+
+    class Meta:
+        unique_together = (("cluster", "topic"),)
+
+
+class UserTopicPref(Model):
+    id = fields.IntField(pk=True)
+    user = fields.ForeignKeyField("models.User", related_name="topic_prefs", on_delete=fields.CASCADE)
+    topic = fields.ForeignKeyField("models.Topic", related_name="user_prefs", on_delete=fields.CASCADE)
+    weight = fields.IntField(default=0)
+    class Meta:
+        unique_together = (("user","topic"),)

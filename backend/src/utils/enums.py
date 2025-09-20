@@ -1,10 +1,52 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class Provider(str, Enum):
-    GITHUB = "github"
-    GOOGLE = "google"
-    VK = "vk"
+class SourceKind(StrEnum):
+    RSS = "rss"
+    HTML = "html"
+    JSONFEED = "jsonfeed"
     TELEGRAM = "telegram"
 
-__all__ = ["Provider"]
+class SourceStatus(StrEnum):
+    ACTIVE = "active"
+    VALIDATING = "validating"
+    ERROR = "error"
+    DISABLED = "disabled"
+
+class UserSourceStatus(StrEnum):
+    ACTIVE = "active"
+    ERROR = "error"
+    VALIDATING = "validating"
+
+class RawContentType(StrEnum):
+    HTML = "html"
+    TEXT = "text"
+    JSON = "json"
+
+class Language(StrEnum):
+    AUTO = "auto"
+    RU = "ru"
+    EN = "en"
+    DE = "de"
+
+
+class TopicKind(StrEnum):
+    POLITICS = "politics"
+    BUSINESS = "business"
+    TECH = "tech"
+    SCIENCE = "science"
+    HEALTH = "health"
+    SPORTS = "sports"
+    ENTERTAINMENT = "entertainment"
+    WORLD = "world"
+    LOCAL = "local"
+    CULTURE = "culture"
+    EDUCATION = "education"
+    TRAVEL = "travel"
+    AUTO = "auto"
+    FINANCE = "finance"
+    REAL_ESTATE = "real_estate"
+    CRIME = "crime"
+    WAR = "war"
+
+__all__ = ["SourceKind", "SourceStatus", "UserSourceStatus", "RawContentType", "Language", "TopicKind"]

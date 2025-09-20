@@ -1,5 +1,7 @@
 from pydantic import BaseModel, field_validator
 
+from settings import settings
+
 
 class PhoneIn(BaseModel):
 
@@ -14,6 +16,7 @@ class PhoneIn(BaseModel):
             raise ValueError("phone too long")
         return v
 
+
 class VerifyIn(PhoneIn):
 
     code: str
@@ -23,3 +26,15 @@ class VerifyIn(PhoneIn):
         if not v.isdigit():
             raise ValueError("code must be digits")
         return v
+
+
+class TokenPair(BaseModel):
+    access: str
+    refresh: str
+    access_expires_in: int = settings.jwt.access_exp
+    token_type: str = "bearer"
+
+
+class RefreshIn(BaseModel):
+    refresh: str
+    token_type: str = "bearer"

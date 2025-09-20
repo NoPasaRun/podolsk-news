@@ -49,8 +49,6 @@ services:
 
   frontend:
     build: ./frontend
-    environment:
-      - VITE_API_BASE=${VITE_API_BASE}
     volumes:
       - ./frontend:/app:rw
       - /app/node_modules

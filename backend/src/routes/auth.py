@@ -1,22 +1,33 @@
+import json
+
 from datetime import timedelta, timezone, datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Depends
 
 from orm.models import User, PhoneOTP
 from schemes.auth import PhoneIn, VerifyIn, RefreshIn, TokenPair
 from settings import settings
 from utils.auth import make_token, gen_code, hash_code, decode_refresh_token
+from redis.asyncio import Redis
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-async def send_sms(phone: str, text: str) -> bool:
+def get_redis(request: Request) -> Redis:
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(500, "Redis not initialized")
+    return r
+
+
+async def send_sms(redis: Redis, payload: dict) -> bool:
     if settings.app.debug:
-        return not print(f"[DEV SMS] {phone}: {text}")
-    return False
+        return not print("[DEV SMS] {phone_number}: {verification_code}".format(**payload))
+    return not await redis.publish(settings.app.bluetooth_channel, json.dumps(payload))
 
 
 @router.post("/request")
-async def request_code(body: PhoneIn):
+async def request_code(body: PhoneIn, r: Redis = Depends(get_redis)):
     phone, now_utc = body.phone, datetime.now(timezone.utc)
     otp = await PhoneOTP.get_or_none(phone=phone)
 
@@ -42,7 +53,7 @@ async def request_code(body: PhoneIn):
             last_sent_at=now_utc,
         )
 
-    response = await send_sms(phone, f"Ваш код: {code}")
+    response = await send_sms(r, payload={"phone_number": phone, "verification_code": code})
     return {"ok": response}
 
 

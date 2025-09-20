@@ -7,6 +7,7 @@ class AppSettings(BaseSettings):
     env: str = Field("dev", alias="ENV")
     secret: str = Field(..., alias="APP_SECRET")
     url: str = Field("http://localhost", alias="PUBLIC_ORIGIN")
+    bluetooth_channel: str | None = Field(None)
 
     @property
     def debug(self) -> bool:

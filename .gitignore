@@ -1,5 +1,6 @@
-.env
+.env*
 node_modules
 .idea
 .git
 podolsk-news.conf
+dist

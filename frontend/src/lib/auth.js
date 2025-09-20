@@ -1,4 +1,4 @@
-const BASE = import.meta?.env?.VITE_API_URL || "http://localhost/api";
+const BASE = import.meta.env.VITE_API_BASE || "http://localhost/api";
 
 
 function mapTokens(data) {

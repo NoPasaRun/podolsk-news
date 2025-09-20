@@ -9,15 +9,23 @@ from routes.user import router as user_router
 from settings import settings
 
 from fastapi.openapi.utils import get_openapi
+from redis.asyncio import Redis, ConnectionPool
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(app: FastAPI):
     await init_db(generate_schemas=False)
+    pool = ConnectionPool.from_url(
+        f"redis://redis:6379", 
+        decode_responses=True, 
+        max_connections=40
+    )
+    app.state.redis = Redis(connection_pool=pool)
     try:
         yield
     finally:
         await close_db()
+        await app.state.redis.close()
 
 
 def custom_openapi():

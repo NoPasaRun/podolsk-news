@@ -1,6 +1,6 @@
 import { clearTokens, loadTokens, saveTokens } from "./tokenStorage";
 import {refreshPair} from "./auth.js";
-const BASE = import.meta?.env?.VITE_API_URL || "http://localhost/api";
+const BASE = import.meta.env.VITE_API_BASE || "http://localhost/api";
 
 
 export function createApi(onUnauthorized, baseURL = BASE, doRefreshFn = refreshPair) {

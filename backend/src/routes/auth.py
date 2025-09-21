@@ -52,7 +52,6 @@ async def request_code(body: PhoneIn, r: Redis = Depends(get_redis)):
             attempts=0,
             last_sent_at=now_utc,
         )
-
     response = await send_sms(r, payload={"phone_number": phone, "verification_code": code})
     return {"ok": response}
 

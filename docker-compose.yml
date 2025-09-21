@@ -18,6 +18,10 @@ services:
     command: ["redis-server","--appendonly","yes"]
     volumes:
       - redis_data:/data
+    networks:
+      default:
+        ipv4_address: 172.15.0.3
+
 
   backend:
     build: ./backend

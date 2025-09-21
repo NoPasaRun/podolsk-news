@@ -19,8 +19,8 @@ export default function App() {
 
   // загрузка новостей
   useEffect(() => {
-    api.get("/news/list")
-      .then(r => r.json().then(setNews) )
+    api.get("/news/all")
+      .then(r => r.json().then(data => setNews(data?.items)) )
       .catch((e) => { setError(e?.message || 'Ошибка'); console.error(e) })
       .finally(() => { setLoading(false) })
   }, [])

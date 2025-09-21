@@ -2,7 +2,7 @@ import hashlib
 import hmac
 import random
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -80,3 +80,13 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="user not found")
 
     return user
+
+
+async def get_optional_user(
+        creds: HTTPAuthorizationCredentials = Depends(security)
+) -> Optional[User]:
+    try:
+        return await get_current_user(creds)
+    except HTTPException:
+        return None
+

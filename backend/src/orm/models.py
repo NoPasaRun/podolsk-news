@@ -5,7 +5,7 @@ from tortoise.indexes import Index
 from tortoise.models import Model
 
 from settings import settings
-from utils.enums import SourceKind, SourceStatus, UserSourceStatus, RawContentType, Language, TopicKind
+from utils.enums import SourceKind, SourceStatus, RawContentType, Language, TopicKind
 
 
 class User(Model):
@@ -15,6 +15,9 @@ class User(Model):
     name = fields.CharField(max_length=255, null=True)
     avatar = fields.CharField(max_length=512, null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
+
+    async def source_ids(self):
+        return [r.source_id for r in await UserSource.filter(user_id=self.id).all()]
 
 
 class PhoneOTP(Model):
@@ -50,7 +53,7 @@ class Source(Model):
     id = fields.IntField(pk=True)
     kind = fields.CharEnumField(SourceKind, max_length=16)
     domain = fields.CharField(max_length=255, index=True)
-    status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.ACTIVE)
+    status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.VALIDATING)
     parser_profile = fields.CharField(max_length=32, null=True)
     parse_overrides = fields.JSONField(null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
@@ -67,7 +70,6 @@ class UserSource(Model):
     id = fields.IntField(pk=True)
     user = fields.ForeignKeyField("models.User", related_name="user_sources", on_delete=fields.CASCADE)
     source = fields.ForeignKeyField("models.Source", related_name="user_sources", on_delete=fields.CASCADE)
-    status = fields.CharEnumField(UserSourceStatus, max_length=16, default=UserSourceStatus.VALIDATING)
     poll_interval_sec = fields.IntField(default=900)
     rank = fields.IntField(default=0)
     labels = fields.JSONField(default=list)

@@ -11,12 +11,6 @@ class SourceStatus(StrEnum):
     ACTIVE = "active"
     VALIDATING = "validating"
     ERROR = "error"
-    DISABLED = "disabled"
-
-class UserSourceStatus(StrEnum):
-    ACTIVE = "active"
-    ERROR = "error"
-    VALIDATING = "validating"
 
 class RawContentType(StrEnum):
     HTML = "html"
@@ -49,4 +43,4 @@ class TopicKind(StrEnum):
     CRIME = "crime"
     WAR = "war"
 
-__all__ = ["SourceKind", "SourceStatus", "UserSourceStatus", "RawContentType", "Language", "TopicKind"]
+__all__ = ["SourceKind", "SourceStatus", "RawContentType", "Language", "TopicKind"]

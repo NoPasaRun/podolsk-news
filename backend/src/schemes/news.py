@@ -1,6 +1,6 @@
 from typing import List, Optional
-from pydantic import BaseModel, AnyUrl
-from utils.enums import Language, TopicKind
+from pydantic import BaseModel
+from utils.enums import TopicKind
 
 
 class TopicOut(BaseModel):
@@ -9,25 +9,21 @@ class TopicOut(BaseModel):
     title: str
 
 
-class ClusterBasic(BaseModel):
+class ArticleOut(BaseModel):
     id: int
     title: str
-    summary: str | None = None
-    first_published_at: str
-    last_updated_at: str
-    weight: int
-
-
-class ArticleBasic(BaseModel):
-    id: int
-    source_id: int
-    source_domain: str
     url: str
-    title: str
-    summary: str | None = None
-    published_at: str
+    source_id: int
+    source_name: str
+    published_at: Optional[str]
 
+class ClusterItem(BaseModel):
+    cluster_id: int
+    article: ArticleOut
+    other_articles: List[ArticleOut] = []
+    is_bookmarked: bool = False
+    is_read: bool = False
 
-class ClusterArticlesOut(BaseModel):
-    cluster: ClusterBasic
-    articles: List[ArticleBasic]
+class NewsListResponse(BaseModel):
+    items: List[ClusterItem]
+    next_cursor: Optional[str] = None

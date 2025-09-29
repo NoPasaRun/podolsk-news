@@ -1,5 +1,4 @@
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost/api";
-
+import {BASE} from "./config.js"
 
 function mapTokens(data) {
   const now = Date.now();

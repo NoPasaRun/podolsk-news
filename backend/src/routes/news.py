@@ -1,12 +1,13 @@
+import random
 from typing import List, Optional, Literal
 
 from fastapi import APIRouter, Depends, Query, HTTPException
-from datetime import datetime
+from datetime import datetime, timezone
 
 from tortoise.expressions import Q
 from tortoise.functions import Max
 
-from orm.models import Topic, User, Article, UserArticleState, Cluster
+from orm.models import Topic, User, Article, UserArticleState, Cluster, UserSource
 from schemes.base import CursorPage, ToggleRequest
 from schemes.news import TopicOut
 from utils.auth import get_current_user, get_optional_user
@@ -16,13 +17,12 @@ from utils.enums import Language
 router = APIRouter(prefix="/news", tags=["news"])
 
 
-async def update_user_article_state(user: User, article_id: int, **kwargs) -> bool:
-    art = await Article.get_or_none(id=article_id)
-    if not art:
-        raise HTTPException(404, "Not found")
-    cluster = await art.cluster
+async def update_user_cluster_state(user: User, cluster_id: int, **kwargs) -> bool:
+    exists = await Cluster.filter(id=cluster_id).exists()
+    if not exists:
+        return False
     rec, _ = await UserArticleState.get_or_create(
-        user_id=user.id, cluster=cluster
+        user_id=user.id, cluster_id=cluster_id
     )
     for key, value in kwargs.items():
         setattr(rec, key, value)
@@ -36,14 +36,14 @@ async def list_topics():
     return [TopicOut(id=r.id, code=r.code, title=r.title) for r in rows]
 
 
-@router.post("/{article_id}/read")
-async def toggle_read(article_id: int, body: ToggleRequest, user: User = Depends(get_current_user)):
-    return {"ok": await update_user_article_state(user, article_id, read=bool(body.value))}
+@router.post("/{cluster_id}/read")
+async def toggle_read(cluster_id: int, body: ToggleRequest, user: User = Depends(get_current_user)):
+    return {"ok": await update_user_cluster_state(user, cluster_id, read=bool(body.value))}
 
 
-@router.post("/{article_id}/bookmark")
-async def toggle_bookmark(article_id: int, body: ToggleRequest, user: User = Depends(get_current_user)):
-    return {"ok": await update_user_article_state(user, article_id, bookmarked=bool(body.value))}
+@router.post("/{cluster_id}/bookmark")
+async def toggle_bookmark(cluster_id: int, body: ToggleRequest, user: User = Depends(get_current_user)):
+    return {"ok": await update_user_cluster_state(user, cluster_id, bookmarked=bool(body.value))}
 
 
 @router.get("/all", response_model=CursorPage)
@@ -131,6 +131,13 @@ async def list_articles_grouped(
 
     arts = await aqs
 
+    cluster_status = {}
+    if user is not None and cluster_ids:
+        rows = await UserArticleState.filter(
+            user_id=user.id, cluster_id__in=cluster_ids
+        ).values("cluster_id", "bookmarked", "read")
+        cluster_status = {r["cluster_id"]: {"bookmarked": r["bookmarked"], "read": r["read"]} for r in rows}
+
     # ===== 3) Группируем в память и обрезаем до max_articles_per_cluster
     grouped: dict[int, list] = {cid: [] for cid in cluster_ids}
     for a in arts:
@@ -147,13 +154,68 @@ async def list_articles_grouped(
                 "language": a.language,
             })
 
-    # Собираем ответ строго в нужном формате
-    items = [{"cluster_id": cid, "articles": grouped.get(cid, [])} for cid in cluster_ids]
+    ranks: dict[int, int] = {}
+    if user is not None:
+        rows = await UserSource.filter(
+            user_id=user.id,
+            # если allowed не None, смысла тянуть лишние нет
+            **({"source_id__in": list(allowed)} if allowed is not None else {})
+        ).values("source_id", "rank")
+        ranks = {r["source_id"]: r["rank"] for r in rows}
 
-    # курсор по последнему кластеру на странице
+    def _parse_dt(s: Optional[str]) -> datetime:
+        if not s:
+            return datetime.min.replace(tzinfo=timezone.utc)
+        try:
+            # поддержим 'Z'
+            if s.endswith("Z"):
+                s = s[:-1] + "+00:00"
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except Exception:
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+    def pick_primary(lst: list[dict]) -> dict:
+        # если есть ранги — берём из источника с максимальным rank,
+        # при равенстве ранга — самую свежую по published_at
+        if ranks:
+            best_rank = None
+            candidates: list[dict] = []
+            for it in lst:
+                r = ranks.get(it["source_id"])
+                if r is None:
+                    continue
+                if best_rank is None or r > best_rank:
+                    best_rank = r
+                    candidates = [it]
+                elif r == best_rank:
+                    candidates.append(it)
+            if candidates:
+                return max(candidates, key=lambda x: (_parse_dt(x["published_at"]), x["id"]))
+        # аноним/нет рангов — случайная статья
+        return random.choice(lst)
+
+    # Собираем ответ в новом формате: article + other_articles
+    items = []
+    for cid in cluster_ids:
+        lst = grouped.get(cid, [])
+        if not lst:
+            # пустые кластеры пропустим
+            continue
+        primary = pick_primary(lst)
+        others = [it for it in lst if it["id"] != primary["id"]]
+        items.append({
+            "cluster_id": cid,
+            "article": primary,
+            "other_articles": others,
+            "bookmarked": cluster_status.get(cid, {}).get("bookmarked", False),
+            "read": cluster_status.get(cid, {}).get("read", False),
+        })
+
+    # курсор по последнему кластеру на странице (как было)
     last = clusters[-1]
     next_cursor = make_cursor(getattr(last, "last_pub") or last.first_published_at, last.id)
 
     return {"items": items, "next_cursor": next_cursor}
-
-

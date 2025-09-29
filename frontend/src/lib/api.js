@@ -1,6 +1,6 @@
 import { clearTokens, loadTokens, saveTokens } from "./tokenStorage";
 import {refreshPair} from "./auth.js";
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost/api";
+import {BASE} from "./config.js"
 
 
 export function createApi(onUnauthorized, baseURL = BASE, doRefreshFn = refreshPair) {
@@ -83,7 +83,7 @@ export function createApi(onUnauthorized, baseURL = BASE, doRefreshFn = refreshP
     },
     fetch: authFetch,
     get: (p) => authFetch(p, { method: "GET" }),
-    del: (p) => authFetch(p, { method: "DELETE" }),
+    delete: (p) => authFetch(p, { method: "DELETE" }),
     post: (p, body) =>
       authFetch(p, {
         method: "POST",

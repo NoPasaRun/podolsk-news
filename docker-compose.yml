@@ -36,21 +36,6 @@ services:
       redis:
         condition: service_started
 
-  worker:
-    build: ./worker
-    env_file: .env
-    environment:
-      POETRY_VIRTUALENVS_CREATE: "false"
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      REDIS_URL: ${REDIS_URL}
-    volumes:
-      - ./worker/src:/app/src:rw
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-
   frontend:
     build: ./frontend
     volumes:

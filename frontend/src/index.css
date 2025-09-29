@@ -11,6 +11,7 @@ body {
 h1, h2, h3, h4, h5, h6 { @apply font-bold; }
 a { @apply text-blue-600 dark:text-blue-400 hover:underline; }
 button { @apply transition-colors duration-200; }
+div { @apply text-black dark:text-white}
 
 @layer components {
   .btn-primary {

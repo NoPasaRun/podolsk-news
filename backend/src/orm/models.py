@@ -54,8 +54,6 @@ class Source(Model):
     kind = fields.CharEnumField(SourceKind, max_length=16)
     domain = fields.CharField(max_length=255, index=True)
     status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.VALIDATING)
-    parser_profile = fields.CharField(max_length=32, null=True)
-    parse_overrides = fields.JSONField(null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
@@ -77,32 +75,6 @@ class UserSource(Model):
 
     class Meta:
         unique_together = (("user", "source"),)
-
-
-class RowData(Model):
-    """
-    Снимок скачанного ресурса.
-    url_original — ссылка из фида/листинга.
-    url_canon — канонизированный URL для дедупа.
-    raw_content — тело ответа.
-    raw_content_type — html/json/text.
-    raw_hash — контрольная сумма (для поиска дублей).
-    """
-    id = fields.IntField(pk=True)
-    source = fields.ForeignKeyField("models.Source", related_name="ingest_events", on_delete=fields.CASCADE)
-    url_original = fields.TextField()
-    url_canon = fields.CharField(null=True, max_length=4096, index=True)
-    fetched_at = fields.DatetimeField(auto_now_add=True, index=True)
-    raw_content = fields.TextField(null=True)
-    raw_content_type = fields.CharEnumField(RawContentType, max_length=8, default=RawContentType.HTML)
-    raw_hash = fields.CharField(max_length=64, null=True, index=True)
-
-    class Meta:
-        indexes = [
-            Index(fields=("source_id", "fetched_at")),
-            Index(fields=("url_canon",)),
-            Index(fields=("raw_hash",)),
-        ]
 
 
 class Cluster(Model):
@@ -192,5 +164,6 @@ class UserTopicPref(Model):
     user = fields.ForeignKeyField("models.User", related_name="topic_prefs", on_delete=fields.CASCADE)
     topic = fields.ForeignKeyField("models.Topic", related_name="user_prefs", on_delete=fields.CASCADE)
     weight = fields.IntField(default=0)
+
     class Meta:
         unique_together = (("user","topic"),)

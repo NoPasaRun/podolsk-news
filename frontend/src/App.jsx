@@ -5,16 +5,18 @@ import AuthPopup from './auth/AuthPopup'
 import ThemeToggle from './components/ThemeToggle'
 import {useAuth} from "./auth/AuthProvider.jsx";
 import './index.css'
+import SourceModal from "./components/SourceModal.jsx";
 
 export default function App() {
   const [news, setNews] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [source, setSource] = useState(false)
 
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('newest')
 
-  const { api, openLogin, closeLogin, showLogin, isAuthed  } = useAuth();
+  const { api, openLogin, closeLogin, showLogin, isAuthed, logout  } = useAuth();
   const [theme, setTheme] = useState('light')
 
   // загрузка новостей
@@ -32,22 +34,18 @@ export default function App() {
     document.documentElement.classList.toggle('dark', saved === 'dark')
   }, [])
 
-  useEffect(() => {
-    localStorage.setItem('theme', theme)
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-  }, [theme])
-
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <header className="flex justify-between items-center px-6 py-4 shadow bg-white dark:bg-gray-800">
         <h1 className="text-2xl font-bold">📰 Новости</h1>
         <div className="flex items-center gap-3">
-          <ThemeToggle theme={theme} setTheme={setTheme} />
+          <ThemeToggle theme={theme} setTheme={setTheme}/>
           {
             !isAuthed ? (
                 <button className="btn-secondary" onClick={openLogin}>Войти</button>
-            ) : <></>
+            ) : <button className="btn-secondary" onClick={logout}>Выйти</button>
           }
+          <button className="btn-primary" onClick={() => setSource(true)}>Источники</button>
         </div>
       </header>
 
@@ -67,9 +65,9 @@ export default function App() {
           </div>
         )}
         {error && <div className="text-center text-red-500 mb-4">Ошибка: {error}</div>}
-        {!loading && !error && <NewsList news={news} />}
+        {!loading && !error && <NewsList items={news} />}
       </main>
-
+      <SourceModal open={source} onClose={()=>setSource(false)} />
       {showLogin && <AuthPopup onClose={closeLogin} />}
     </div>
   )

@@ -20,8 +20,9 @@ async def build_user_source_out(us: UserSource) -> UserSourceOut:
     return UserSourceOut(
         id=us.id,
         source=SourceOut(
-            id=src.id, kind=src.kind, domain=src.domain, status=src.status,
-            parser_profile=src.parser_profile, created_at=src.created_at.isoformat()
+            id=src.id, kind=src.kind,
+            domain=src.domain, status=src.status,
+            created_at=src.created_at.isoformat()
         ),
         poll_interval_sec=us.poll_interval_sec,
         rank=us.rank,
@@ -39,18 +40,14 @@ async def create_source(payload: SourceCreate, user: User = Depends(get_current_
     async with in_transaction():
         src, _ = await Source.get_or_create(
             kind=payload.kind, domain=payload.domain,
-            defaults={
-                "status": "validating",
-                "parser_profile": payload.parser_profile,
-                "parse_overrides": payload.parse_overrides
-            }
+            defaults={"status": "validating"}
         )
         us, _ = await UserSource.get_or_create(user_id=user.id, source_id=src.id)
     # возврат
     return await build_user_source_out(us)
 
 
-@router.post("/add", response_model=UserSourceOut)
+@router.post("/{source_id}", response_model=UserSourceOut)
 async def add_user_source(source_id: int, user: User = Depends(get_current_user)):
     if not (source := await Source.get_or_none(id=source_id)):
         raise HTTPException(404, "Not found")
@@ -58,9 +55,9 @@ async def add_user_source(source_id: int, user: User = Depends(get_current_user)
     return await build_user_source_out(us)
 
 
-@router.delete("/remove")
-async def remove_user_source(user_source_id: int, user: User = Depends(get_current_user)):
-    us = await UserSource.get_or_none(id=user_source_id, user_id=user.id)
+@router.delete("/{source_id}")
+async def remove_user_source(source_id: int, user: User = Depends(get_current_user)):
+    us = await UserSource.get_or_none(source_id=source_id, user_id=user.id)
     if not us:
         raise HTTPException(404, "Not found")
     await us.delete()
@@ -79,20 +76,8 @@ async def list_my_sources(
         qs = qs.filter(id__gt=last_id)
 
     rows = await qs.limit(limit)
-    items = []
-    for us in rows:
-        src = us.source
-        items.append(UserSourceOut(
-            id=us.id,
-            source=SourceOut(
-                id=src.id, kind=src.kind, domain=src.domain, status=src.status,
-                parser_profile=src.parser_profile, created_at=src.created_at.isoformat()
-            ),
-            poll_interval_sec=us.poll_interval_sec,
-            rank=us.rank,
-            labels=us.labels or [],
-            created_at=us.created_at.isoformat(),
-        ))
+    items = [await build_user_source_out(us) for us in rows]
+
     next_cursor = make_cursor(datetime.now(timezone.utc), rows[-1].id) if rows else None
     return {"items": items, "next_cursor": next_cursor}
 
@@ -106,7 +91,7 @@ async def catalog_sources(
     limit: int = Query(50, ge=1, le=100),
     cursor: Optional[str] = None
 ):
-    qs = Source.all().order_by("id")
+    qs = Source.filter(status=SourceStatus.ACTIVE).order_by("id")
 
     if kind:
         qs = qs.filter(kind=kind)
@@ -123,13 +108,16 @@ async def catalog_sources(
     # подтянем одним запросом user-линки
     connected_map = {}
     if user:
-        links = await UserSource.filter(user_id=user.id, source_id__in=[r.id for r in rows]).values("id","source_id")
+        links = await UserSource.filter(
+            user_id=user.id,
+            source_id__in=[r.id for r in rows]
+        ).values("id","source_id")
         connected_map = {l["source_id"]: l["id"] for l in links}
 
     items = [
         SourceCatalogItem(
             id=r.id, kind=r.kind, domain=r.domain, status=r.status,
-            parser_profile=r.parser_profile, created_at=r.created_at.isoformat(),
+            created_at=r.created_at.isoformat(),
             connected=(r.id in connected_map),
             user_source_id=connected_map.get(r.id)
         )
@@ -148,15 +136,4 @@ async def update_source(user_source_id: int, body: UserSourceUpdate, user: User 
     for k, v in patch.items():
         setattr(us, k, v)
     await us.save()
-    src = us.source
-    return UserSourceOut(
-        id=us.id,
-        source=SourceOut(
-            id=src.id, kind=src.kind, domain=src.domain, status=src.status,
-            parser_profile=src.parser_profile, created_at=src.created_at.isoformat()
-        ),
-        poll_interval_sec=us.poll_interval_sec,
-        rank=us.rank,
-        labels=us.labels or [],
-        created_at=us.created_at.isoformat(),
-    )
+    return await build_user_source_out(us)

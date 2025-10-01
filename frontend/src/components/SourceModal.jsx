@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import {useAuth} from "../auth/AuthProvider.jsx";
 import { useSourceVerifySocket } from '../lib/useSourceVerifySocket';
 import StatusBadge from "./StatusBadge.jsx";
+import Alert from "../Alert.jsx";
 
 export default function SourceModal({ open, onClose }) {
   const {api} = useAuth();
@@ -22,6 +23,7 @@ export default function SourceModal({ open, onClose }) {
 
   const [form, setForm] = useState({ domain: '', kind: '' });
   const [saving, setSaving] = useState(false);
+  const [openError, setOpenError] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -74,11 +76,17 @@ export default function SourceModal({ open, onClose }) {
     setSaving(true);
     try {
       const res = await sourcesApi.createSource({ domain: form.domain, kind: form.kind });
-      // ожидаем, что вернется {source_id, user_source_id?, status:'verifying'}
+      if (!res?.id) {
+        throw new DOMException("Client Error")
+      }
       await refresh();
-    } finally {
-      setSaving(false);
+    } catch (e) {
+      setOpenError(true)
+      setSaving(false)
+      return null
     }
+    setSaving(false)
+    setTab('mine')
   };
 
   const updateUserSource = async (userSourceId, patch) => {
@@ -223,6 +231,13 @@ export default function SourceModal({ open, onClose }) {
             </form>
         )}
       </div>
+      <Alert
+        open={openError}
+        onClose={() => {setOpenError(false)}}
+        title={"Ошибка сохранения"}
+        description={"Такой источник уже существует"}
+        variant={"warning"}
+      />
     </div>
   );
 }

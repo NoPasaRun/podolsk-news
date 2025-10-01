@@ -1,4 +1,13 @@
 services:
+  redis:
+    image: redis:7
+    command: [ "redis-server","--appendonly","yes" ]
+    volumes:
+      - redis_data:/data
+    networks:
+      default:
+        ipv4_address: 172.15.0.3
+
   db:
     image: postgres:16
     environment:
@@ -12,16 +21,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
-  redis:
-    image: redis:7
-    command: ["redis-server","--appendonly","yes"]
-    volumes:
-      - redis_data:/data
-    networks:
-      default:
-        ipv4_address: 172.15.0.3
-
 
   backend:
     build: ./backend
@@ -38,6 +37,7 @@ services:
 
   frontend:
     build: ./frontend
+    env_file: .env
     volumes:
       - ./frontend:/app:rw
       - /app/node_modules

@@ -14,12 +14,6 @@ class SourceStatus(StrEnum):
     ERROR = "error"
 
 
-class RawContentType(StrEnum):
-    HTML = "html"
-    TEXT = "text"
-    JSON = "json"
-
-
 class Language(StrEnum):
     AUTO = "auto"
     RU = "ru"

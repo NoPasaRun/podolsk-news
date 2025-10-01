@@ -5,7 +5,7 @@ from tortoise.indexes import Index
 from tortoise.models import Model
 
 from settings import settings
-from utils.enums import SourceKind, SourceStatus, RawContentType, Language, TopicKind
+from utils.enums import SourceKind, SourceStatus, Language, TopicKind
 
 
 class User(Model):
@@ -52,7 +52,7 @@ class Source(Model):
     """
     id = fields.IntField(pk=True)
     kind = fields.CharEnumField(SourceKind, max_length=16)
-    domain = fields.CharField(max_length=255, index=True)
+    domain = fields.TextField()
     status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.VALIDATING)
     created_at = fields.DatetimeField(auto_now_add=True)
 
@@ -70,7 +70,6 @@ class UserSource(Model):
     source = fields.ForeignKeyField("models.Source", related_name="user_sources", on_delete=fields.CASCADE)
     poll_interval_sec = fields.IntField(default=900)
     rank = fields.IntField(default=0)
-    labels = fields.JSONField(default=list)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
@@ -110,10 +109,8 @@ class Article(Model):
     source = fields.ForeignKeyField("models.Source", related_name="articles", on_delete=fields.CASCADE)
     cluster = fields.ForeignKeyField("models.Cluster", related_name="articles", on_delete=fields.CASCADE)
     url = fields.TextField()
-    url_canon = fields.CharField(null=True, max_length=4096, index=True)
     title = fields.TextField()
     summary = fields.TextField(null=True)
-    content_html = fields.TextField(null=True)
     published_at = fields.DatetimeField(index=True)
     language = fields.CharEnumField(Language, max_length=8, default=Language.AUTO)
     content_fingerprint = fields.CharField(max_length=64, null=True, index=True)
@@ -122,8 +119,7 @@ class Article(Model):
     class Meta:
         indexes = [
             Index(fields=("cluster_id", "published_at")),
-            Index(fields=("source_id", "published_at")),
-            Index(fields=("url_canon",)),
+            Index(fields=("source_id", "published_at"))
         ]
         unique_together = (("source", "url"),)
 

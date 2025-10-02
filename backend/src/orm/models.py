@@ -54,6 +54,7 @@ class Source(Model):
     kind = fields.CharEnumField(SourceKind, max_length=16)
     domain = fields.TextField()
     status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.VALIDATING)
+    is_default = fields.BooleanField(default=False)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

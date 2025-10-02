@@ -3,7 +3,6 @@ from enum import StrEnum
 
 class SourceKind(StrEnum):
     RSS = "rss"
-    HTML = "html"
     JSONFEED = "jsonfeed"
     TELEGRAM = "telegram"
 

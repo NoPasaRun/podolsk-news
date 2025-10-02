@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import NewsList from './components/NewsList'
 import NewsFilters from './components/NewsFilters'
 import AuthPopup from './auth/AuthPopup'
@@ -6,26 +6,53 @@ import ThemeToggle from './components/ThemeToggle'
 import {useAuth} from "./auth/AuthProvider.jsx";
 import './index.css'
 import SourceModal from "./components/SourceModal.jsx";
+import Alert from "./Alert.jsx";
+import { useFilters } from "./auth/useFilters.jsx";
 
 export default function App() {
   const [news, setNews] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [isErrorOpen, setErrorOpen] = useState(false)
   const [source, setSource] = useState(false)
 
-  const [search, setSearch] = useState('')
-  const [sort, setSort] = useState('newest')
-
-  const { api, openLogin, closeLogin, showLogin, isAuthed, logout  } = useAuth();
   const [theme, setTheme] = useState('light')
+  const [isBottom, setIsBottom] = useState(false)
+  const [cursor, setCursor] = useState(null)
 
-  // загрузка новостей
+  // наш фильтр-хук
+  const { api, openLogin, closeLogin, showLogin, isAuthed, logout  } = useAuth();
+  const { filters, state: filterState, set: filterSet, reset: resetFilters } = useFilters();
+
+  // helper: собрать URL для fetch
+  const buildUrl = useCallback((base, filtersStr, extraParamsObj) => {
+    // filtersStr вида "?a=1&b=2" или ""
+    const hasQ = !!filtersStr;
+    const url = new URL(base + (filtersStr || ""), window.location.origin);
+    if (extraParamsObj) {
+      Object.entries(extraParamsObj).forEach(([k, v]) => {
+        if (v !== null && v !== undefined && v !== "") url.searchParams.set(k, v);
+      });
+    }
+    // Вернём только path+search (без хоста), т.к. api.get ждёт относительный путь
+    return url.pathname + "?" + url.searchParams.toString();
+  }, []);
+
+  // первичная загрузка + реакция на смену фильтров
   useEffect(() => {
-    api.get("/news/all")
-      .then(r => r.json().then(data => setNews(data?.items)) )
-      .catch((e) => { setError(e?.message || 'Ошибка'); console.error(e) })
-      .finally(() => { setLoading(false) })
-  }, [])
+    setLoading(true);
+    setErrorOpen(false);
+    setNews([]);
+    setCursor(null);
+
+    const url = buildUrl("/news/all", filters);
+    api.get(url)
+      .then(r => r.json().then(data => {
+        setNews(data?.items || []);
+        setCursor(data?.next_cursor || null);
+      }))
+      .catch(() => setErrorOpen(true))
+      .finally(() => setLoading(false));
+  }, [api, filters, buildUrl]);
 
   // тема (persist)
   useEffect(() => {
@@ -33,6 +60,34 @@ export default function App() {
     setTheme(saved)
     document.documentElement.classList.toggle('dark', saved === 'dark')
   }, [])
+
+  const handleScroll = () => {
+    const { scrollTop, clientHeight, scrollHeight } = document.documentElement;
+    if (scrollTop + clientHeight >= scrollHeight) {
+      setIsBottom(true);
+    } else {
+      setIsBottom(false);
+    }
+  };
+
+  // бесконечная прокрутка (берёт те же фильтры + cursor)
+  useEffect(() => {
+    if (!isBottom) return;
+    if (!cursor) return;
+
+    const url = buildUrl("/news/all", filters, { cursor });
+    api.get(url)
+      .then(r => r.json().then(data => {
+        setNews((prev) => [...prev, ...(data?.items || [])]);
+        setCursor(data?.next_cursor || null);
+      }))
+      .catch(() => setErrorOpen(true));
+  }, [isBottom, cursor, api, filters, buildUrl]);
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -50,7 +105,13 @@ export default function App() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
-        <NewsFilters search={search} setSearch={setSearch} sort={sort} setSort={setSort} />
+        {/* Фильтры теперь работают через наш хук */}
+        <NewsFilters
+          api={api}
+          state={filterState}
+          set={filterSet}
+          onReset={resetFilters}
+        />
 
         {loading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -64,11 +125,20 @@ export default function App() {
             ))}
           </div>
         )}
-        {error && <div className="text-center text-red-500 mb-4">Ошибка: {error}</div>}
-        {!loading && !error && <NewsList items={news} />}
+
+        {!loading && !isErrorOpen && <NewsList items={news} />}
       </main>
+
       <SourceModal open={source} onClose={()=>setSource(false)} />
       {showLogin && <AuthPopup onClose={closeLogin} />}
+
+      <Alert
+        open={isErrorOpen}
+        onClose={() => {setErrorOpen(false)}}
+        title={"Ошибка загрузки"}
+        description={"Войдите в аккаунт по номеру телефона"}
+        variant={"destructive"}
+      />
     </div>
   )
 }

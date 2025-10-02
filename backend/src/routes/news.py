@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from tortoise.expressions import Q
 from tortoise.functions import Max
 
-from orm.models import Topic, User, Article, UserArticleState, Cluster, UserSource
+from orm.models import Topic, User, Article, UserArticleState, Cluster, UserSource, Source
 from schemes.base import CursorPage, ToggleRequest
 from schemes.news import TopicOut
 from utils.auth import get_current_user, get_optional_user
@@ -52,7 +52,6 @@ async def list_articles_grouped(
 
     # фильтры
     topic_ids: Optional[List[int]] = Query(None),
-    source_ids: Optional[List[int]] = Query(None),  # пересекаем с подключёнными
     language: Optional[Language] = Query(None),
     q: Optional[str] = Query(None, min_length=2),
     since: Optional[str] = Query(None),  # ISO
@@ -64,17 +63,19 @@ async def list_articles_grouped(
 
     # сортировка/пагинация кластеров
     sort: Literal["recent", "weight"] = "recent",
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(5, ge=1, le=100),
     cursor: Optional[str] = None,
 ):
     # --- разрешённые источники пользователя
-    allowed = set()
-    if user is not None:
-        my_src = set(await user.source_ids())
-        if source_ids:
-            allowed = my_src.intersection(set(source_ids))
-        else:
-            allowed = my_src
+    allowed = set(
+        await user.source_ids()
+        if user is not None
+        else [
+            row.get("id") for row in
+            await Source.filter(is_default=True).values("id")
+        ]
+    )
+
     if not allowed:
         return {"items": [], "next_cursor": None}
 

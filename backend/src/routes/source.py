@@ -26,7 +26,6 @@ async def build_user_source_out(us: UserSource) -> UserSourceOut:
         ),
         poll_interval_sec=us.poll_interval_sec,
         rank=us.rank,
-        labels=us.labels or [],
         created_at=us.created_at.isoformat()
     )
 

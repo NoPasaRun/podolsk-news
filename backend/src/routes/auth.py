@@ -3,7 +3,7 @@ import json
 from datetime import timedelta, timezone, datetime
 from fastapi import APIRouter, HTTPException, Request, Depends
 
-from orm.models import User, PhoneOTP
+from orm.models import User, PhoneOTP, Source, UserSource
 from schemes.auth import PhoneIn, VerifyIn, RefreshIn, TokenPair
 from settings import settings
 from utils.auth import make_token, gen_code, hash_code, decode_refresh_token
@@ -81,6 +81,9 @@ async def verify_code(body: VerifyIn) -> TokenPair:
     user = await User.get_or_none(phone=phone)
     if not user:
         user = await User.create(phone=phone, phone_verified_at=now_utc)
+        async for source in Source.filter(is_default=True):
+            await UserSource.create(user=user, source=source)
+
 
     payload = {"sub": str(user.id)}
     return TokenPair(

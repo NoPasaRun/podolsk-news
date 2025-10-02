@@ -23,14 +23,12 @@ class UserSourceOut(BaseModel):
     source: SourceOut
     poll_interval_sec: int
     rank: int
-    labels: List[str]
     created_at: str
 
 
 class UserSourceUpdate(BaseModel):
     poll_interval_sec: Optional[int] = None
     rank: Optional[int] = None
-    labels: Optional[List[str]] = None
 
 
 class SourceCatalogItem(BaseModel):

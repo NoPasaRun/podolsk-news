@@ -1,5 +1,5 @@
 // src/components/NewsCard.jsx
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo } from 'react';
 
 export default function NewsCard({
   item,              // { cluster_id, article, other_articles, is_bookmarked, is_read }
@@ -14,33 +14,6 @@ export default function NewsCard({
   const isBookmarked = !!item.bookmarked;
   const isRead = !!item.read;
 
-    // >>> NEW: наблюдаем появление карточки на экране
-  const rootRef = useRef(null);
-
-  useEffect(() => {
-    if (!rootRef.current) return;
-    if (isRead) return; // уже прочитано — не отслеживаем
-
-    const el = rootRef.current;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const e = entries[0];
-        if (e && e.isIntersecting && e.intersectionRatio >= 0.6) {
-          // оптимистично подсветим как прочитанное
-          onToggleRead(item.cluster_id, true).catch(() => {});
-          observer.disconnect();
-        }
-      },
-      {
-        root: null,          // viewport
-        rootMargin: '0px',
-        threshold: [0, 0.25, 0.5, 0.6, 0.75, 1],
-      }
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [item.cluster_id, onToggleRead]);
 
   const published = useMemo(() => {
     if (!main.published_at) return '';
@@ -51,7 +24,7 @@ export default function NewsCard({
   }, [main.published_at]);
 
   return (
-      <div ref={rootRef} className="border rounded-2xl p-4 bg-white dark:bg-neutral-900 shadow-sm">
+      <div className="border rounded-2xl p-4 bg-white dark:bg-neutral-900 shadow-sm">
         <div className="mb-2">
           <a href={main.url} target="_blank" rel="noreferrer"
              className="text-lg font-semibold hover:underline">

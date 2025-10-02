@@ -2,10 +2,15 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import NewsCard from './NewsCard';
+import Alert from "../Alert.jsx";
 
 export default function NewsList({ items: initialItems }) {
   // items: [{ cluster_id, article, other_articles }, ...]
   const {api} = useAuth();
+
+  const [isCopyInfoOpen, setCopyInfoOpen] = useState(false)
+  const [isCopyErrorOpen, setCopyErrorOpen] = useState(false)
+
   const newsApi = useMemo(() => ({
     async bookmarkCluster(clusterId, value) {
       return await api.post(`/news/${clusterId}/bookmark`, { value });
@@ -19,7 +24,7 @@ export default function NewsList({ items: initialItems }) {
   // локальная копия ленты, чтобы можно было менять is_bookmarked
   const [items, setItems] = useState(initialItems || []);
   // если приходят новые пропсы извне — можно синхронизировать:
-  // useEffect(()=> setItems(initialItems||[]), [initialItems]);
+  useEffect(()=> setItems(initialItems||[]), [initialItems]);
 
   const [open, setOpen] = useState(() => new Set());
   const toggle = useCallback((cid) => {
@@ -38,9 +43,10 @@ export default function NewsList({ items: initialItems }) {
         ta.value = url; document.body.appendChild(ta);
         ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
       }
-      // eslint-disable-next-line no-alert
-      alert('Ссылка скопирована');
-    } catch { alert('Не удалось скопировать'); }
+      setCopyInfoOpen(true)
+    } catch {
+      setCopyErrorOpen(true)
+    }
   }, []);
 
   const toggleBookmark = useCallback(async (clusterId, nextValue) => {
@@ -80,6 +86,20 @@ export default function NewsList({ items: initialItems }) {
           onToggleRead={toggleRead}
         />
       ))}
+      <Alert
+        open={isCopyInfoOpen}
+        onClose={() => {setCopyInfoOpen(false)}}
+        title={"Успех!"}
+        description={"Ссылка успешна скопирована"}
+        variant={"success"}
+      />
+      <Alert
+        open={isCopyErrorOpen}
+        onClose={() => {setCopyErrorOpen(false)}}
+        title={"Ошибка!"}
+        description={"Ссылка не скопирована"}
+        variant={"destructive"}
+      />
     </div>
   );
 }

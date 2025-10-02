@@ -1,15 +1,12 @@
-from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, Query, HTTPException
-from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from orm.models import User, Source, UserSource
 from schemes.base import CursorPage
 from schemes.source import UserSourceOut, SourceCreate, SourceOut, UserSourceUpdate, SourceCatalogItem
 from utils.auth import get_current_user, get_optional_user
-from utils.cursor import parse_cursor, make_cursor
 from utils.enums import SourceKind, SourceStatus
 
 router = APIRouter(prefix="/source", tags=["source"])
@@ -63,48 +60,28 @@ async def remove_user_source(source_id: int, user: User = Depends(get_current_us
     return {"ok": True}
 
 
-@router.get("/my", response_model=CursorPage)
+@router.get("/my")
 async def list_my_sources(
-    user: User = Depends(get_current_user),
-    limit: int = Query(50, ge=1, le=100),
-    cursor: Optional[str] = None
-):
+    user: User = Depends(get_current_user)
+) -> List[UserSourceOut]:
     qs = UserSource.filter(user_id=user.id).prefetch_related("source").order_by("id")
-    if cursor:
-        _, last_id = parse_cursor(cursor)
-        qs = qs.filter(id__gt=last_id)
-
-    rows = await qs.limit(limit)
-    items = [await build_user_source_out(us) for us in rows]
-
-    next_cursor = make_cursor(datetime.now(timezone.utc), rows[-1].id) if rows else None
-    return {"items": items, "next_cursor": next_cursor}
+    return [await build_user_source_out(us) for us in await qs]
 
 
-@router.get("/all", response_model=CursorPage)
+@router.get("/all")
 async def catalog_sources(
     user: Optional[User] = Depends(get_optional_user),
     kind: Optional[SourceKind] = Query(None),
-    status: Optional[SourceStatus] = Query(None),
-    q: Optional[str] = Query(None, min_length=2),
-    limit: int = Query(50, ge=1, le=100),
-    cursor: Optional[str] = None
-):
+    status: Optional[SourceStatus] = Query(None)
+) -> List[SourceCatalogItem]:
     qs = Source.filter(status=SourceStatus.ACTIVE).order_by("id")
 
     if kind:
         qs = qs.filter(kind=kind)
     if status:
         qs = qs.filter(status=status)
-    if q:
-        qs = qs.filter(Q(domain__icontains=q))
+    rows = await qs
 
-    if cursor:
-        _, last_id = parse_cursor(cursor)
-        qs = qs.filter(id__gt=last_id)
-
-    rows = await qs.limit(limit)
-    # подтянем одним запросом user-линки
     connected_map = {}
     if user:
         links = await UserSource.filter(
@@ -113,7 +90,7 @@ async def catalog_sources(
         ).values("id","source_id")
         connected_map = {l["source_id"]: l["id"] for l in links}
 
-    items = [
+    return [
         SourceCatalogItem(
             id=r.id, kind=r.kind, domain=r.domain, status=r.status,
             created_at=r.created_at.isoformat(),
@@ -122,8 +99,6 @@ async def catalog_sources(
         )
         for r in rows
     ]
-    next_cursor = make_cursor(datetime.now(timezone.utc), rows[-1].id) if rows else None
-    return {"items": items, "next_cursor": next_cursor}
 
 
 @router.patch("/update/{user_source_id}", response_model=UserSourceOut)

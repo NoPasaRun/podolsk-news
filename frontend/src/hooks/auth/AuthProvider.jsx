@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { createApi } from "../lib/api";
-import { loadTokens, saveTokens, clearTokens } from "../lib/tokenStorage";
+import { createApi } from "@/lib/api";
+import { loadTokens, saveTokens, clearTokens } from "@/lib/tokenStorage";
 import SessionExpiredModal from "./SessionExpiredModal";
-import {refreshPair} from "../lib/auth.js";
+import {refreshPair} from "@/lib/auth";
 
 const AuthCtx = createContext(null);
 
@@ -78,7 +78,7 @@ export function AuthProvider({ children }) {
     setExpiredOpen(false);
   };
 
-  const value = { api, showLogin, openLogin, closeLogin, isAuthed: !!tokens, login, logout };
+  const value = { api, showLogin, openLogin, closeLogin, isAuthed: !!tokens, login, logout, onUnauthorized };
 
   return (
     <AuthCtx.Provider value={value}>

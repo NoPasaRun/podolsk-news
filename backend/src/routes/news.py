@@ -1,18 +1,18 @@
-import random
 from typing import List, Optional, Literal
 
-from fastapi import APIRouter, Depends, Query, HTTPException
-from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, Query
+from datetime import datetime
 
-from tortoise.expressions import Q
 from tortoise.functions import Max
 
-from orm.models import Topic, User, Article, UserArticleState, Cluster, UserSource, Source
+from orm.models import Topic, User, UserArticleState, Cluster
 from schemes.base import CursorPage, ToggleRequest
 from schemes.news import TopicOut
 from utils.auth import get_current_user, get_optional_user
-from utils.cursor import parse_cursor, make_cursor
+from utils.cursor import make_cursor_weight, make_cursor_recent
 from utils.enums import Language
+from utils.news import fetch_articles_for_clusters, fetch_cluster_flags, fetch_user_source_ranks, pick_primary, \
+    apply_cluster_filters, resolve_allowed_source_ids, apply_keyset_cursor
 
 router = APIRouter(prefix="/news", tags=["news"])
 
@@ -46,6 +46,7 @@ async def toggle_bookmark(cluster_id: int, body: ToggleRequest, user: User = Dep
     return {"ok": await update_user_cluster_state(user, cluster_id, bookmarked=bool(body.value))}
 
 
+
 @router.get("/all", response_model=CursorPage)
 async def list_articles_grouped(
     user: User = Depends(get_optional_user),
@@ -54,10 +55,10 @@ async def list_articles_grouped(
     topic_ids: Optional[List[int]] = Query(None),
     language: Optional[Language] = Query(None),
     q: Optional[str] = Query(None, min_length=2),
-    since: Optional[str] = Query(None),  # ISO
-    until: Optional[str] = Query(None),
+    since: Optional[datetime] = Query(None),
+    until: Optional[datetime] = Query(None),
 
-    # выборки внутри кластера
+    # выборка внутри кластера
     max_articles_per_cluster: int = Query(6, ge=1, le=20),
     order_in_cluster: Literal["date_desc", "date_asc"] = "date_desc",
 
@@ -66,48 +67,33 @@ async def list_articles_grouped(
     limit: int = Query(5, ge=1, le=100),
     cursor: Optional[str] = None,
 ):
-    # --- разрешённые источники пользователя
-    allowed = set(
-        await user.source_ids()
-        if user is not None
-        else [
-            row.get("id") for row in
-            await Source.filter(is_default=True).values("id")
-        ]
-    )
-
+    # 0) Разрешённые источники
+    allowed = await resolve_allowed_source_ids(user)
     if not allowed:
         return {"items": [], "next_cursor": None}
 
-    # ===== 1) Выбираем кластеры, где есть статьи из allowed и проходят фильтры
-    cqs = Cluster.filter(articles__source_id__in=list(allowed)).distinct()
+    # 1) Базовый запрос по кластерам + фильтры
+    cqs = Cluster.filter(articles__source_id__in=allowed).distinct()
+    cqs = apply_cluster_filters(
+        cqs,
+        topic_ids=topic_ids,
+        language=language,
+        q=q,
+        since=since,
+        until=until,
+    )
 
-    if topic_ids:
-        cqs = cqs.filter(cluster_topics__topic_id__in=topic_ids)
-    if language:
-        cqs = cqs.filter(language=language)
-    if since:
-        cqs = cqs.filter(first_published_at__gte=datetime.fromisoformat(since))
-    if until:
-        cqs = cqs.filter(first_published_at__lte=datetime.fromisoformat(until))
-    if q:
-        cqs = cqs.filter(Q(title__icontains=q) | Q(summary__icontains=q))
-
-    # аннотируем "последнюю публикацию" по моим источникам — для сортировки/курсора
+    # 1.1) Аннотация "последней публикации" по моим источникам
     cqs = cqs.annotate(last_pub=Max("articles__published_at"))
 
+    # 1.2) Сортировка
     if sort == "weight":
         cqs = cqs.order_by("-weight", "-last_pub", "-id")
-    else:  # recent
+    else:
         cqs = cqs.order_by("-last_pub", "-id")
 
-    if cursor:
-        cdt, cid = parse_cursor(cursor)
-        if sort == "weight":
-            # упрощённо: пагиним по last_pub + id
-            cqs = cqs.filter(Q(last_pub__lt=cdt) | Q(last_pub=cdt, id__lt=cid))
-        else:
-            cqs = cqs.filter(Q(last_pub__lt=cdt) | Q(last_pub=cdt, id__lt=cid))
+    # 1.3) Курсор (keyset) — корректный для конкретной сортировки
+    cqs = apply_keyset_cursor(cqs, sort=sort, cursor=cursor)
 
     clusters = await cqs.limit(limit)
     if not clusters:
@@ -115,108 +101,46 @@ async def list_articles_grouped(
 
     cluster_ids = [c.id for c in clusters]
 
-    # ===== 2) Внутренняя выборка статей этих кластеров (только мои источники)
-    aqs = Article.filter(cluster_id__in=cluster_ids, source_id__in=list(allowed)).prefetch_related("source")
+    # 2) Внутренние статьи кластеров (только из allowed)
+    grouped = await fetch_articles_for_clusters(
+        cluster_ids=cluster_ids,
+        allowed_source_ids=allowed,
+        language=language,
+        since=since,
+        until=until,
+        order_in_cluster=order_in_cluster,
+        max_articles_per_cluster=max_articles_per_cluster,
+    )
 
-    if language:
-        aqs = aqs.filter(language=language)
-    if since:
-        aqs = aqs.filter(published_at__gte=datetime.fromisoformat(since))
-    if until:
-        aqs = aqs.filter(published_at__lte=datetime.fromisoformat(until))
+    # 3) Кластерные флаги (bookmarked/read) и ранги источников
+    cluster_flags = await fetch_cluster_flags(user, cluster_ids)
+    ranks = await fetch_user_source_ranks(user, allowed)
 
-    if order_in_cluster == "date_asc":
-        aqs = aqs.order_by("cluster_id", "published_at", "id")
-    else:
-        aqs = aqs.order_by("cluster_id", "-published_at", "-id")
-
-    arts = await aqs
-
-    cluster_status = {}
-    if user is not None and cluster_ids:
-        rows = await UserArticleState.filter(
-            user_id=user.id, cluster_id__in=cluster_ids
-        ).values("cluster_id", "bookmarked", "read")
-        cluster_status = {r["cluster_id"]: {"bookmarked": r["bookmarked"], "read": r["read"]} for r in rows}
-
-    # ===== 3) Группируем в память и обрезаем до max_articles_per_cluster
-    grouped: dict[int, list] = {cid: [] for cid in cluster_ids}
-    for a in arts:
-        lst = grouped.setdefault(a.cluster_id, [])
-        if len(lst) < max_articles_per_cluster:
-            lst.append({
-                "id": a.id,
-                "source_id": a.source_id,
-                "source_domain": a.source.domain,
-                "url": a.url,
-                "title": a.title,
-                "summary": a.summary,
-                "published_at": a.published_at.isoformat(),
-                "language": a.language,
-            })
-
-    ranks: dict[int, int] = {}
-    if user is not None:
-        rows = await UserSource.filter(
-            user_id=user.id,
-            # если allowed не None, смысла тянуть лишние нет
-            **({"source_id__in": list(allowed)} if allowed is not None else {})
-        ).values("source_id", "rank")
-        ranks = {r["source_id"]: r["rank"] for r in rows}
-
-    def _parse_dt(s: Optional[str]) -> datetime:
-        if not s:
-            return datetime.min.replace(tzinfo=timezone.utc)
-        try:
-            # поддержим 'Z'
-            if s.endswith("Z"):
-                s = s[:-1] + "+00:00"
-            dt = datetime.fromisoformat(s)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt
-        except Exception:
-            return datetime.min.replace(tzinfo=timezone.utc)
-
-    def pick_primary(lst: list[dict]) -> dict:
-        # если есть ранги — берём из источника с максимальным rank,
-        # при равенстве ранга — самую свежую по published_at
-        if ranks:
-            best_rank = None
-            candidates: list[dict] = []
-            for it in lst:
-                r = ranks.get(it["source_id"])
-                if r is None:
-                    continue
-                if best_rank is None or r > best_rank:
-                    best_rank = r
-                    candidates = [it]
-                elif r == best_rank:
-                    candidates.append(it)
-            if candidates:
-                return max(candidates, key=lambda x: (_parse_dt(x["published_at"]), x["id"]))
-        # аноним/нет рангов — случайная статья
-        return random.choice(lst)
-
-    # Собираем ответ в новом формате: article + other_articles
+    # 4) Сборка ответа (article + other_articles + флаги)
     items = []
     for cid in cluster_ids:
         lst = grouped.get(cid, [])
         if not lst:
-            # пустые кластеры пропустим
             continue
-        primary = pick_primary(lst)
+        primary = pick_primary(lst, ranks)
         others = [it for it in lst if it["id"] != primary["id"]]
+        flags = cluster_flags.get(cid, {})
         items.append({
             "cluster_id": cid,
             "article": primary,
             "other_articles": others,
-            "bookmarked": cluster_status.get(cid, {}).get("bookmarked", False),
-            "read": cluster_status.get(cid, {}).get("read", False),
+            "bookmarked": bool(flags.get("bookmarked", False)),
+            "read": bool(flags.get("read", False)),
         })
 
-    # курсор по последнему кластеру на странице (как было)
+    # 5) next_cursor — по последнему кластеру
+
     last = clusters[-1]
-    next_cursor = make_cursor(getattr(last, "last_pub") or last.first_published_at, last.id)
+    last_pub = getattr(last, "last_pub") or getattr(last, "first_published_at")
+
+    if sort == "weight":
+        next_cursor = make_cursor_weight(getattr(last, "weight") or 0, last_pub, last.id)
+    else:
+        next_cursor = make_cursor_recent(last_pub, last.id)
 
     return {"items": items, "next_cursor": next_cursor}

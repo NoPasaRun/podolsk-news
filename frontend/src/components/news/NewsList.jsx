@@ -1,11 +1,10 @@
 // src/components/NewsList.jsx
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { useAuth } from '../auth/AuthProvider.jsx';
+import { useAuth } from '@/hooks/auth/AuthProvider';
 import NewsCard from './NewsCard';
-import Alert from "../Alert.jsx";
+import Alert from "@/components/widgets/Alert";
 
 export default function NewsList({ items: initialItems }) {
-  // items: [{ cluster_id, article, other_articles }, ...]
   const {api} = useAuth();
 
   const [isCopyInfoOpen, setCopyInfoOpen] = useState(false)
@@ -75,9 +74,9 @@ export default function NewsList({ items: initialItems }) {
 
   return (
     <div className="grid gap-3 md:gap-4">
-      {items.map((it) => (
+      {items.map((it, index) => (
         <NewsCard
-          key={it.cluster_id}
+          key={index}
           item={it}
           isOpen={open.has(it.cluster_id)}
           onToggleMore={() => toggle(it.cluster_id)}

@@ -1,6 +1,6 @@
 // src/lib/useSourceVerifySocket.js
 import { useEffect, useRef } from 'react';
-import { useAuth } from '../auth/AuthProvider';
+import { useAuth } from '@/hooks/auth/AuthProvider';
 import {BASE} from "./config.js"
 
 

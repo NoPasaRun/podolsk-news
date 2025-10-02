@@ -28,7 +28,7 @@ export default function NewsCard({
         <div className="mb-2">
           <a href={main.url} target="_blank" rel="noreferrer"
              className="text-lg font-semibold hover:underline">
-            {main.title}
+              {main.title}
           </a>
         </div>
         {main.summary && (

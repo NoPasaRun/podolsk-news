@@ -1,9 +1,9 @@
 // src/components/SourceModal.jsx
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import {useAuth} from "../auth/AuthProvider.jsx";
-import { useSourceVerifySocket } from '../lib/useSourceVerifySocket';
-import StatusBadge from "./StatusBadge.jsx";
-import Alert from "../Alert.jsx";
+import {useAuth} from "@/hooks/auth/AuthProvider";
+import { useSourceVerifySocket } from '@/lib/useSourceVerifySocket';
+import StatusBadge from "./StatusBadge";
+import Alert from "./Alert";
 
 export default function SourceModal({ open, onClose }) {
   const {api} = useAuth();
@@ -33,8 +33,8 @@ export default function SourceModal({ open, onClose }) {
         sourcesApi.listAllSources(),
       ]);
 
-      setMine((prev) => [...(mineRes?.items || [])]); // под твой формат
-      setAllSources((prev) => [...(allRes?.items || [])]);
+      setMine(_ => [...(mineRes || [])]); // под твой формат
+      setAllSources(_ => [...(allRes || [])]);
     } finally {
       setLoading(false);
     }

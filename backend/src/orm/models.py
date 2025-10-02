@@ -56,6 +56,7 @@ class Source(Model):
     status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.VALIDATING)
     is_default = fields.BooleanField(default=False)
     created_at = fields.DatetimeField(auto_now_add=True)
+    last_updated_at = fields.DatetimeField(auto_now=True, null=True)
 
     class Meta:
         unique_together = (("kind", "domain"),)

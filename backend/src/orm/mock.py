@@ -19,7 +19,7 @@ DEFAULT_SOURCES = [
     (SourceKind.RSS,  "www.reuters.com",   SourceStatus.ACTIVE,     "generic_rss"),
     (SourceKind.RSS,  "www.bbc.com",       SourceStatus.ACTIVE,     "generic_rss"),
     (SourceKind.RSS,  "habr.com",          SourceStatus.ACTIVE,     "generic_rss"),
-    (SourceKind.HTML, "www.rbc.ru",        SourceStatus.VALIDATING, "rbc_html"),
+    (SourceKind.TELEGRAM, "www.rbc.ru",        SourceStatus.VALIDATING, "rbc_html"),
     (SourceKind.RSS,  "www.theverge.com",  SourceStatus.ACTIVE,     "generic_rss"),
     (SourceKind.JSONFEED, "api.meduza.io", SourceStatus.ACTIVE,     "jsonfeed_default"),
 ]

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth } from './AuthProvider'
-import {requestAuth, verifyAuth} from "../lib/auth.js";
+import {requestAuth, verifyAuth} from "@/lib/auth";
 
 export default function AuthPopup({ onClose }) {
   const { login } = useAuth()

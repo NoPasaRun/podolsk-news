@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import NewsList from './components/NewsList'
-import NewsFilters from './components/NewsFilters'
-import AuthPopup from './auth/AuthPopup'
-import ThemeToggle from './components/ThemeToggle'
-import {useAuth} from "./auth/AuthProvider.jsx";
+import NewsList from './components/news/NewsList'
+import NewsFilters from './components/news/NewsFilters'
+import AuthPopup from './hooks/auth/AuthPopup'
+import ThemeToggle from './components/widgets/ThemeToggle'
+import {useAuth} from "./hooks/auth/AuthProvider";
 import './index.css'
-import SourceModal from "./components/SourceModal.jsx";
-import Alert from "./Alert.jsx";
-import { useFilters } from "./auth/useFilters.jsx";
+import SourceModal from "./components/widgets/SourceModal";
+import Alert from "./components/widgets/Alert";
+import { useFilters } from "./hooks/news/useFilters";
 
 export default function App() {
   const [news, setNews] = useState([])
@@ -20,13 +20,11 @@ export default function App() {
   const [cursor, setCursor] = useState(null)
 
   // наш фильтр-хук
-  const { api, openLogin, closeLogin, showLogin, isAuthed, logout  } = useAuth();
+  const { api, openLogin, closeLogin, showLogin, isAuthed, logout, onUnauthorized  } = useAuth();
   const { filters, state: filterState, set: filterSet, reset: resetFilters } = useFilters();
 
   // helper: собрать URL для fetch
   const buildUrl = useCallback((base, filtersStr, extraParamsObj) => {
-    // filtersStr вида "?a=1&b=2" или ""
-    const hasQ = !!filtersStr;
     const url = new URL(base + (filtersStr || ""), window.location.origin);
     if (extraParamsObj) {
       Object.entries(extraParamsObj).forEach(([k, v]) => {
@@ -43,7 +41,6 @@ export default function App() {
     setErrorOpen(false);
     setNews([]);
     setCursor(null);
-
     const url = buildUrl("/news/all", filters);
     api.get(url)
       .then(r => r.json().then(data => {
@@ -75,6 +72,7 @@ export default function App() {
     if (!isBottom) return;
     if (!cursor) return;
 
+    setIsBottom(false)
     const url = buildUrl("/news/all", filters, { cursor });
     api.get(url)
       .then(r => r.json().then(data => {
@@ -100,7 +98,7 @@ export default function App() {
                 <button className="btn-secondary" onClick={openLogin}>Войти</button>
             ) : <button className="btn-secondary" onClick={logout}>Выйти</button>
           }
-          <button className="btn-primary" onClick={() => setSource(true)}>Источники</button>
+          <button className="btn-primary" onClick={isAuthed ? () => setSource(true) : onUnauthorized}>Источники</button>
         </div>
       </header>
 

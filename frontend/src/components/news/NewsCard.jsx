@@ -1,5 +1,6 @@
 // src/components/NewsCard.jsx
 import { useMemo } from 'react';
+import Time from "@/components/ui/Time.jsx";
 
 export default function NewsCard({
   item,              // { cluster_id, article, other_articles, is_bookmarked, is_read }
@@ -14,15 +15,6 @@ export default function NewsCard({
   const isBookmarked = !!item.bookmarked;
   const isRead = !!item.read;
 
-
-  const published = useMemo(() => {
-    if (!main.published_at) return '';
-    try {
-      const d = new Date(main.published_at);
-      return d.toLocaleString();
-    } catch { return main.published_at; }
-  }, [main.published_at]);
-
   return (
       <div className="border rounded-2xl p-4 bg-white dark:bg-neutral-900 shadow-sm">
         <div className="mb-2">
@@ -31,13 +23,11 @@ export default function NewsCard({
               {main.title}
           </a>
         </div>
-        {main.summary && (
-            <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-3">
-              {main.summary}
-            </p>
-        )}
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-3">
+          {main.summary}
+        </p>
         <div className="mt-2 text-xs text-neutral-500">
-          {main.source_domain} • {published}
+          {main.source_domain} • <Time iso={main.published_at} />
         </div>
 
         {/* Кнопки действий */}
@@ -77,13 +67,16 @@ export default function NewsCard({
               <ul className="mt-3 space-y-2 border-t pt-3">
                   {others.map((it) => (
                       <li key={it.id} className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
+                          <div className="min-w-0 mb-5">
                               <a href={it.url} target="_blank" rel="noreferrer"
                                  className="text-sm hover:underline break-all">
                                   {it.title || it.url}
                               </a>
+                              <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-3 mb-2">
+                                  {it.summary}
+                              </p>
                               <div className="text-xs text-neutral-500">
-                                  {it.source_domain}
+                                  {it.source_domain} • <Time iso={it.published_at}/>
                               </div>
                           </div>
                           <button

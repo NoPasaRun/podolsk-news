@@ -85,10 +85,7 @@ class Cluster(Model):
     weight — «популярность» (кол-во источников, свежесть, клики).
     """
     id = fields.IntField(pk=True)
-    title = fields.TextField()
-    summary = fields.TextField(null=True)
-    top_image = fields.TextField(null=True)
-    first_published_at = fields.DatetimeField(index=True)
+    first_published_at = fields.DatetimeField(index=True, auto_now_add=True)
     last_updated_at = fields.DatetimeField(auto_now=True, index=True)
     language = fields.CharEnumField(Language, max_length=8, default=Language.AUTO)
     weight = fields.IntField(default=0)
@@ -111,6 +108,7 @@ class Article(Model):
     source = fields.ForeignKeyField("models.Source", related_name="articles", on_delete=fields.CASCADE)
     cluster = fields.ForeignKeyField("models.Cluster", related_name="articles", on_delete=fields.CASCADE)
     url = fields.TextField()
+    image = fields.TextField(null=True)
     title = fields.TextField()
     summary = fields.TextField(null=True)
     published_at = fields.DatetimeField(index=True)

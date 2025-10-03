@@ -175,7 +175,7 @@ void DBManager::insertDemoSource() {
     dbCheck();
 
    QStringList inserts = {
-
+        //test
         // 1) placeholder-кластер (id=228)
         R"SQL(
         INSERT INTO public.cluster (id, title, summary, top_image, first_published_at, language, weight)

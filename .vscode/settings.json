@@ -8,5 +8,8 @@
   
     // Спрячем автоген, чтобы индексатор не открывал их как "ручные" файлы
     "files.exclude": { "**/*_autogen/**": true },
-    "C_Cpp.files.exclude": { "**/*_autogen/**": true }
+    "C_Cpp.files.exclude": {
+        "**/*_autogen/**": true
+    },
+    "cmake.sourceDirectory": "/home/Artem/vscode/podolsk-news/parser"
   }

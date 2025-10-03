@@ -19,7 +19,7 @@ add_compile_options(-Wno-multichar)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Sql)
 
-add_subdirectory(feedpp)
+add_subdirectory(feedpplib)
 # исполняемый файл
 
 file(GLOB_RECURSE SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")

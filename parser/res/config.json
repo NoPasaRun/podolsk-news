@@ -1,0 +1,11 @@
+
+{
+    
+    "lazy_time": 60,  
+    "db_address": "172.15.0.4",
+    "db_port": 5432,
+    "db_name": "newsdb",
+    "db_user": "news",
+    "db_password": "supersecret"
+}
+

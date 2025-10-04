@@ -11,5 +11,5 @@
     "C_Cpp.files.exclude": {
         "**/*_autogen/**": true
     },
-    "cmake.sourceDirectory": "/home/Artem/vscode/podolsk-news/parser"
+    "cmake.sourceDirectory": "/home/bogdan/PycharmProjects/podolsk-news/parser"
   }

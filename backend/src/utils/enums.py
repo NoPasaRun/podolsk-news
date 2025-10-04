@@ -18,6 +18,7 @@ class Language(StrEnum):
     RU = "ru"
     EN = "en"
     DE = "de"
+    ES = "es"
 
 
 class TopicKind(StrEnum):
@@ -40,4 +41,4 @@ class TopicKind(StrEnum):
     LOCALE = "local"
 
 
-__all__ = ["SourceKind", "SourceStatus", "RawContentType", "Language", "TopicKind"]
+__all__ = ["SourceKind", "SourceStatus", "Language", "TopicKind"]

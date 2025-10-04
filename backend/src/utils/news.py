@@ -18,7 +18,7 @@ async def resolve_allowed_source_ids(user: Optional[User]) -> List[int]:
 
 def apply_cluster_filters(
     qs, *,
-    topic_ids: Optional[List[int]],
+    topic_ids: Optional[List[str]],
     language: Optional[Language],
     q: Optional[str],
     since: Optional[datetime],

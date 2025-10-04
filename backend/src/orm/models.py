@@ -101,8 +101,6 @@ class Cluster(Model):
 class Article(Model):
     """
     Нормализованный документ для выдачи.
-    content_html — очищенный текст/HTML.
-    content_fingerprint — simhash/minhash для дедупа.
     """
     id = fields.IntField(pk=True)
     source = fields.ForeignKeyField("models.Source", related_name="articles", on_delete=fields.CASCADE)
@@ -113,7 +111,6 @@ class Article(Model):
     summary = fields.TextField(null=True)
     published_at = fields.DatetimeField(index=True)
     language = fields.CharEnumField(Language, max_length=8, default=Language.AUTO)
-    content_fingerprint = fields.CharField(max_length=64, null=True, index=True)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
@@ -138,7 +135,6 @@ class UserArticleState(Model):
 
 class Topic(Model):
     id = fields.IntField(pk=True)
-    code = fields.CharEnumField(TopicKind, max_length=32, unique=True)
     title = fields.CharField(max_length=128)
     created_at = fields.DatetimeField(auto_now_add=True)
 

@@ -74,6 +74,8 @@ export default function NewsFilters({ api, state, set, onReset }) {
             <option value="">Любой</option>
             <option value="ru">Русский</option>
             <option value="en">English</option>
+            <option value="de">Deutsch</option>
+            <option value="es">Espanol</option>
           </select>
         </div>
 

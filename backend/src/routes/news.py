@@ -33,7 +33,7 @@ async def update_user_cluster_state(user: User, cluster_id: int, **kwargs) -> bo
 @router.get("/topics/all", response_model=List[TopicOut])
 async def list_topics():
     rows = await Topic.all().order_by("id")
-    return [TopicOut(id=r.id, code=r.code, title=r.title) for r in rows]
+    return [TopicOut(id=r.id, title=r.title) for r in rows]
 
 
 @router.post("/{cluster_id}/read")

@@ -23,59 +23,65 @@ void ParseDaemon::start() {
     tick(); // сразу первый запуск
 }
 
-QString ParseDaemon::languageCheck(QString text)    //ПРОХОДИТ ВСЮ СТРОКУ, В НЕКТОРЫХ СЛУЧАЯХ МОЖНО ОБОЙТИСЬ ПЕРВЫМ СЛОВОМ ИЛИ ДАЖЕ ПЕРВОЙ БУКВОЙ
-{
 
-    QList<QChar> russianChars = {QChar('а'), QChar('б'), QChar('в'), QChar('г'), QChar('д'), QChar('е'), QChar('ё'), QChar('ж'), QChar('з'), QChar('и'), QChar('й'), QChar('к'), QChar('л'), QChar('м'), QChar('н'), QChar('о'), QChar('п'), QChar('р'), QChar('с'), QChar('т'), QChar('у'), QChar('ф'), QChar('х'), QChar('ц'), QChar('ч'), QChar('ш'), QChar('щ'), QChar('ъ'), QChar('ы'), QChar('ь'), QChar('э'), QChar('ю'), QChar('я')};
-    QList<QChar> germanChars  = {QChar('ä'), QChar('ö'), QChar('ü'), QChar('ß')};
-    QList<QChar> spanishChars = {QChar('ñ'), QChar('á'), QChar('é'), QChar('í'), QChar('ó'), QChar('ú')};
-    QList<QChar> englishChars = {QChar('a'), QChar('b'), QChar('c'), QChar('d'), QChar('e'), QChar('f'), QChar('g'), QChar('h'), QChar('i'), QChar('j'), QChar('k'), QChar('l'), QChar('m'), QChar('n'), QChar('o'), QChar('p'), QChar('q'), QChar('r'), QChar('s'), QChar('t'), QChar('u'), QChar('v'), QChar('w'), QChar('x'), QChar('y'), QChar('z')};
-    for (const auto& ch : text) {
-        if (russianChars.contains(ch)) {
-            return "ru";
-        } else if (germanChars.contains(ch)) {
-            return "de"; 
-        } else if (spanishChars.contains(ch)) {
-            return "es"; 
-        }else if (englishChars.contains(ch)) {
-            return "en"; 
-        }
+QString ParseDaemon::languageCheck(QStringView text)
+{
+    for (QChar ch : text) {
+        if (!ch.isLetter())
+            continue;
+
+        const QChar c = ch.toLower();       // один раз к нижнему регистру
+        const ushort u = c.unicode();
+
+        // --- Русский (кириллица "а".."я" + "ё") ---
+        // 'а'..'я' = 0x0430..0x044F, 'ё' = 0x0451
+        if ((u >= 0x0430 && u <= 0x044F) || u == 0x0451)
+            return QStringLiteral("ru");
+
+        // --- Немецкий маркёры: ä ö ü ß ---
+        if (u == 0x00E4 || u == 0x00F6 || u == 0x00FC || u == 0x00DF)
+            return QStringLiteral("de");
+
+        // --- Испанский маркёры: ñ á é í ó ú ---
+        if (u == 0x00F1 || u == 0x00E1 || u == 0x00E9 ||
+            u == 0x00ED || u == 0x00F3 || u == 0x00FA)
+            return QStringLiteral("es");
+
+        // --- Базовая латиница (английский) ---
+        if (u >= 'a' && u <= 'z')
+            return QStringLiteral("en");
+
+        // Если попали сюда — буква не из наших маркёров, идём дальше.
     }
 
-    return "ru"; // Если язык не определён
-
+    // Фолбэк как у тебя
+    return QStringLiteral("ru");
 }
 
 
-
 QDateTime parsePublishedAtUtc(const feedpp::item& it) {
-    // 1) Текстовая дата (в RSS есть таймзона) — приоритетно
+    auto okRange = [](const QDateTime& d){
+        return d.isValid() && d.date().year() >= 1990 && d.date().year() <= 2100;
+    };
+
+    // 1) Текстовая дата
     if (!it.pubDate.empty()) {
-        const QString s = QString::fromStdString(it.pubDate);
+        const QString s = QString::fromStdString(it.pubDate).trimmed();
         QDateTime dt = QDateTime::fromString(s, Qt::RFC2822Date);
         if (!dt.isValid()) dt = QDateTime::fromString(s, Qt::ISODate);
-        if (dt.isValid()) {
-            const QDateTime out = dt.toUTC();
-            if (out.date().year() >= 1990 && out.date().year() <= 2100) // sanity для новостей
-                return out;
-        }
+        if (!dt.isValid()) dt = QDateTime::fromString(s, Qt::ISODateWithMs); // ← добавили
+        if (okRange(dt)) return dt.toUTC();
     }
 
-    // 2) Числовой timestamp — определяем единицы
+    // 2) Числовой timestamp (s/ms/µs/ns)
     if (it.pubDate_ts > 0) {
-        qint64 v = static_cast<qint64>(it.pubDate_ts);
+        const qint64 v = static_cast<qint64>(it.pubDate_ts);
         QDateTime dt;
-
-        if (v >= 100000000000000LL) {        // >= 1e14 → микросекунды
-            dt = QDateTime::fromMSecsSinceEpoch(v / 1000, Qt::UTC);
-        } else if (v >= 1000000000000LL) {   // >= 1e12 → миллисекунды
-            dt = QDateTime::fromMSecsSinceEpoch(v, Qt::UTC);
-        } else {                              // секунды
-            dt = QDateTime::fromSecsSinceEpoch(v, Qt::UTC);
-        }
-
-        if (dt.isValid() && dt.date().year() >= 1990 && dt.date().year() <= 2100)
-            return dt;
+        if      (v >= 1'000'000'000'000'000'000LL) dt = QDateTime::fromMSecsSinceEpoch(v / 1'000'000, Qt::UTC); // ns→ms
+        else if (v >=     100'000'000'000'000LL)   dt = QDateTime::fromMSecsSinceEpoch(v / 1'000,     Qt::UTC); // µs→ms
+        else if (v >=       1'000'000'000'000LL)   dt = QDateTime::fromMSecsSinceEpoch(v,             Qt::UTC); // ms
+        else                                       dt = QDateTime::fromSecsSinceEpoch(v,              Qt::UTC); // s
+        if (okRange(dt)) return dt;
     }
 
     // 3) Фолбэк
@@ -141,10 +147,11 @@ void ParseDaemon::parceSources(const QList<QVariantMap> &sources)
 
                 QVariantMap row{
                     {"url",                 QString::fromStdString(it.link)},
-                    {"url_canon",           QString()},                     // placeholder
+                    {"url_image",           QString::fromStdString(it.enclosure_url)},
+                    {"url_type",            QString::fromStdString(it.enclosure_type)},
                     {"title",               QString::fromStdString(it.title)},
                     {"summary",             QString::fromStdString(it.description)},
-                    {"content_html",        QString()},                     // placeholder
+                    {"guid",                QString::fromStdString(it.guid)},                     
                     {"published_at",        feedPublishedAt},
                     {"language",            feedLang},
                     {"content_fingerprint", QString()},                      // placeholder

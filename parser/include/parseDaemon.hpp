@@ -22,7 +22,7 @@ class ParseDaemon : public QObject {
 
 public:
     explicit ParseDaemon(QObject* parent = nullptr);
-    QString languageCheck(QString text);
+    QString languageCheck(QStringView text);
     void parceSources(const QList<QVariantMap> &sources);
     ~ParseDaemon();
 

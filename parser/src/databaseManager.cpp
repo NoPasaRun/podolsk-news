@@ -146,8 +146,8 @@ QVector<int> DBManager::insertArticles(const QList<QVariantMap>& rows) {
 
         // Необязательные
         // image
-        if (r.contains("image") && !r.value("image").isNull())
-            q.bindValue(":p_image", r.value("image"));
+        if (r.contains("url_image") && !r.value("url_image").isNull())
+            q.bindValue(":p_image", r.value("url_image"));
         else
             q.bindValue(":p_image", QVariant(QVariant::String)); // NULL
 
@@ -157,25 +157,8 @@ QVector<int> DBManager::insertArticles(const QList<QVariantMap>& rows) {
         else
             q.bindValue(":p_summary", QVariant(QVariant::String)); // NULL
 
-        // published_at (лучше в UTC)
-        {
-            QDateTime dt = r.value("published_at").toDateTime();
-            if (!dt.isValid()) {
-                qWarning() << "[insertArticles] invalid published_at for url:" << r.value("url");
-                db.rollback();
-                return {};
-            }
-            // Если не указана таймзона — нормализуем в UTC
-            if (dt.timeSpec() == Qt::LocalTime || dt.timeSpec() == Qt::TimeZone || dt.timeSpec() == Qt::OffsetFromUTC)
-                dt = dt.toUTC();
-            else if (dt.timeSpec() == Qt::UTC) {
-                // ок
-            } else {
-                // Неизвестно — тоже в UTC
-                dt = dt.toUTC();
-            }
-            q.bindValue(":p_published_at", dt);
-        }
+        q.bindValue(":p_published_at",  r.value("published_at").toDateTime());
+        
 
         // language
         if (r.contains("language") && !r.value("language").isNull())

@@ -73,10 +73,10 @@ export default function NewsList({ items: initialItems }) {
   }
 
   return (
-    <div className="grid gap-3 md:gap-4">
-      {items.map((it, index) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+      {items.map((it) => (
         <NewsCard
-          key={index}
+          key={it.cluster_id}
           item={it}
           isOpen={open.has(it.cluster_id)}
           onToggleMore={() => toggle(it.cluster_id)}

@@ -42,11 +42,22 @@ class OTPSettings(BaseSettings):
     hash_salt: str = Field(..., alias="OTP_HASH_SALT")
 
 
+class RedisSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    in_channel: str = Field(..., alias="REDIS_IN_CHANNEL")
+    out_channel: str = Field(..., alias="REDIS_OUT_CHANNEL")
+
+    @property
+    def url(self):
+        return f"redis://redis:6379/0"
+
+
 class Settings:
     app = AppSettings()
     db = DBSettings()
     jwt = JWTSettings()
     otp = OTPSettings()
+    redis= RedisSettings()
 
 
 settings = Settings()

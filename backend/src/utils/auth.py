@@ -2,11 +2,12 @@ import hashlib
 import hmac
 import random
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Type
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, WebSocketException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
+from fastapi.websockets import WebSocket
 
 from orm.models import User
 from settings import settings
@@ -51,13 +52,12 @@ def decode_refresh_token(token: str) -> dict[str, Any]:
 
 security = HTTPBearer(auto_error=False)
 
-async def get_current_user(
-    creds: HTTPAuthorizationCredentials = Depends(security)
-) -> User:
-    if creds is None:
-        raise HTTPException(status_code=401, detail="auth required")
 
-    token = creds.credentials
+async def get_user(
+        token: str,
+        exception_class: Type[Exception] = HTTPException,
+        **kwargs
+) -> User:
     try:
         payload = jwt.decode(
             token,
@@ -66,20 +66,53 @@ async def get_current_user(
             options={"verify_aud": False},
         )
     except JWTError:
-        raise HTTPException(status_code=401, detail="invalid token")
+        WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+        raise exception_class(**kwargs)
 
     if payload.get("typ") != "access":
-        raise HTTPException(status_code=401, detail="not access token")
+        raise exception_class(**kwargs)
 
     sub = payload.get("sub")
     if not sub:
-        raise HTTPException(status_code=401, detail="no subject")
+        raise exception_class(**kwargs)
 
     user = await User.get_or_none(id=sub)
     if not user:
-        raise HTTPException(status_code=401, detail="user not found")
+        raise exception_class(**kwargs)
 
     return user
+
+
+async def get_current_user(
+    creds: HTTPAuthorizationCredentials = Depends(security)
+) -> User:
+    if creds is None:
+        raise HTTPException(status_code=401, detail="auth required")
+
+    return await get_user(
+        creds.credentials, Exception,
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="forbidden"
+    )
+
+
+def parse_bearer(auth: Optional[str]) -> Optional[str]:
+    if not auth: return None
+    if auth.lower().startswith("bearer, "):
+        return auth.replace("bearer, ", "")
+    return None
+
+
+async def get_current_user_ws(websocket: WebSocket) -> User:
+    token = parse_bearer(websocket.headers.get("sec-websocket-protocol"))
+    if not token:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+
+    return await get_user(
+        token, WebSocketException,
+        code=status.WS_1008_POLICY_VIOLATION,
+        reason="forbidden"
+    )
 
 
 async def get_optional_user(

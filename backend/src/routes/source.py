@@ -1,15 +1,20 @@
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
+
 from tortoise.transactions import in_transaction
 
 from orm.models import User, Source, UserSource
-from schemes.base import CursorPage
 from schemes.source import UserSourceOut, SourceCreate, SourceOut, UserSourceUpdate, SourceCatalogItem
 from utils.auth import get_current_user, get_optional_user
 from utils.enums import SourceKind, SourceStatus
+from utils.redis import RedisBroker
 
 router = APIRouter(prefix="/source", tags=["source"])
+
+
+def get_broker(request: Request) -> RedisBroker:
+    return request.app.state.broker
 
 
 async def build_user_source_out(us: UserSource) -> UserSourceOut:
@@ -35,8 +40,7 @@ async def create_source(payload: SourceCreate, user: User = Depends(get_current_
     """
     async with in_transaction():
         src, _ = await Source.get_or_create(
-            kind=payload.kind, domain=payload.domain,
-            defaults={"status": "validating"}
+            kind=payload.kind, domain=payload.domain
         )
         us, _ = await UserSource.get_or_create(user_id=user.id, source_id=src.id)
     # возврат

@@ -27,11 +27,12 @@ public:
     QString getGlobalSourcesJson();
 
     void demoData();
-    void insertDemoSource() ;
+    void insertDemoSource();
+
+    QVariantMap getSourceById(int id);
+    bool updateSourceStatus(int id, const QString& status);
 
     bool bumpSourcesLastUpdatedRange(int idFrom, int idTo, const QDateTime &ts);
-
-
 
     QVector<int> insertArticles(const QList<QVariantMap> &rows);
     // QVector<int> upsertArticlesBatch(const QList<QVariantMap> &rows);

@@ -3,7 +3,6 @@ import random
 from typing import Optional, List, Literal, Dict
 
 from tortoise.expressions import Q, RawSQL
-from tortoise.fields import BooleanField, FloatField
 
 from orm.models import Source, User, Article, UserArticleState, UserSource
 from utils.cursor import parse_cursor_weight, parse_cursor_recent, _from_micros
@@ -102,7 +101,8 @@ async def fetch_articles_for_clusters(
             "url": a.url,
             "title": a.title,
             "summary": a.summary,
-            "published_at": a.published_at.isoformat() if a.published_at else None
+            "published_at": a.published_at.isoformat() if a.published_at else None,
+            "image": a.image
         }
         lst = grouped.setdefault(a.cluster_id, [])
         if len(lst) < max_articles_per_cluster:

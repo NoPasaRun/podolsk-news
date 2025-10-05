@@ -22,15 +22,22 @@ class ParseDaemon : public QObject {
 
 public:
     explicit ParseDaemon(QObject* parent = nullptr);
-    QString languageCheck(QStringView text);
-    void parceSources(const QList<QVariantMap> &sources);
     ~ParseDaemon();
+
+    bool parseOneSourceById(int sourceId, QString* errorOut = nullptr);
+    bool setSourceStatus(int sourceId, const QString& status);
 
     void start();
 
 private slots:
     void tick();
+    void parceSources(const QList<QVariantMap>& sources);
+    bool parseOneSourceWithParser(class feedpp::parser& p,
+                                  const QVariantMap& src,
+                                  QString* errorOut);
 
+    QString languageCheck(QStringView text);
+    friend QDateTime parsePublishedAtUtc(const struct feedpp::item& it);
 private:
     QTimer timer;
     DBManager DBMg;

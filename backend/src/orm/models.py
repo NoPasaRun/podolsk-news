@@ -59,7 +59,7 @@ class Source(Model):
     id = fields.IntField(pk=True)
     kind = fields.CharEnumField(SourceKind, max_length=16)
     domain = fields.TextField()
-    status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.VALIDATING)
+    status = fields.CharEnumField(SourceStatus, max_length=16, default=SourceStatus.ERROR)
     is_default = fields.BooleanField(default=False)
     created_at = fields.DatetimeField(auto_now_add=True)
     last_updated_at = fields.DatetimeField(auto_now=True, null=True)

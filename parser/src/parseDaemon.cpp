@@ -36,7 +36,7 @@ QString ParseDaemon::languageCheck(QStringView text) //поменять на lan
         // --- Русский (кириллица "а".."я" + "ё") ---
         // 'а'..'я' = 0x0430..0x044F, 'ё' = 0x0451
         if ((u >= 0x0430 && u <= 0x044F) || u == 0x0451)
-            return QStringLiteral("ru");
+            return QStringLiteral("russian");
 
         // --- Немецкий маркёры: ä ö ü ß ---
         if (u == 0x00E4 || u == 0x00F6 || u == 0x00FC || u == 0x00DF)
@@ -111,77 +111,84 @@ void ParseDaemon::tick() {
 
 void ParseDaemon::parceSources(const QList<QVariantMap> &sources)
 {
-    feedpp::parser p(/*timeout*/ 7, /*UA*/ "PodolskNews/1.0"); 
-    
+    feedpp::parser p(/*timeout*/ 7, /*UA*/ "PodolskNews/1.0");
 
     for (const auto &src : sources)
     {
+        QString err;
+        if (!parseOneSourceWithParser(p, src, &err)) {
+            const int sid = src.value("id").toInt();
+            qWarning() << "Feed parse error for source" << sid << ":" << err;
+            // можно тут ставить статус error, но оставлю решение сервису
+        }
+    }
+}
 
-  
-        const int sourceId = src.value("id").toInt();
-        const QString feedUrl = src.value("domain").toString();
-        QDateTime lastUpdate = src.value("last_updated_at").toDateTime();
+bool ParseDaemon::parseOneSourceWithParser(feedpp::parser& p,
+                                           const QVariantMap& src,
+                                           QString* err)
+{
+    const int      sourceId   = src.value("id").toInt();
+    const QString  feedUrl    = src.value("domain").toString();
+    const QDateTime lastUpdate = src.value("last_updated_at").toDateTime();
 
+    try {
+        feedpp::feed f = p.parse_url(feedUrl.toStdString());
+        const QString feedLang = languageCheck(QString::fromStdString(f.title));
 
-        try
-        {
-            // парсим фид
-            feedpp::feed f = p.parse_url(feedUrl.toStdString());
+        QList<QVariantMap> batch;
+        batch.reserve(50);
 
-            const QString feedLang = {languageCheck(QString::fromStdString(f.title))};
-
-            QList<QVariantMap> batch;
-            batch.reserve(BATCH_SIZE);
-
-            // 2.2 конвертим items -> строки для БД
-            for (const auto &it : f.items)
-            {
-                QDateTime feedPublishedAt = parsePublishedAtUtc(it);
-
-                // фильтр: только новее последнего апдейта источника
-                if (lastUpdate.isValid() && !(feedPublishedAt > lastUpdate)) {
-                    static int oldNews = 0;
-                    qDebug() << "Новость древняя, пропускаем " << oldNews++;
-                    continue;
-                }
-
-                QVariantMap row{
-                    {"url",                 QString::fromStdString(it.link)},
-                    {"url_image",           QString::fromStdString(it.enclosure_url)},
-                    {"url_type",            QString::fromStdString(it.enclosure_type)},
-                    {"title",               QString::fromStdString(it.title)},
-                    {"summary",             QString::fromStdString(it.description)},
-                    {"guid",                QString::fromStdString(it.guid)},
-                    {"published_at",        feedPublishedAt},
-                    {"language",            feedLang},
-                    {"content_fingerprint", QString()},                      // placeholder
-                    {"source_id",           sourceId}
-                };
-
-
-                batch.push_back(std::move(row));
-
-                if (batch.size() == BATCH_SIZE)
-                {
-                    DBMg.insertArticles(batch);
-                    batch.clear();
-                }
+        for (const auto &it : f.items) {
+            const QDateTime feedPublishedAt = parsePublishedAtUtc(it);
+            if (lastUpdate.isValid() && !(feedPublishedAt > lastUpdate)) {
+                continue; // только свежее
             }
 
-            // Хвост
-            if (!batch.isEmpty())
-            {
+            QVariantMap row{
+                {"url",                 QString::fromStdString(it.link)},
+                {"url_image",           QString::fromStdString(it.enclosure_url)},
+                {"url_type",            QString::fromStdString(it.enclosure_type)},
+                {"title",               QString::fromStdString(it.title)},
+                {"summary",             QString::fromStdString(it.description)},
+                {"guid",                QString::fromStdString(it.guid)},
+                {"published_at",        feedPublishedAt},
+                {"language",            feedLang},
+                {"content_fingerprint", QString()},
+                {"source_id",           sourceId}
+            };
+
+            batch.push_back(std::move(row));
+            if (batch.size() >= 50) {
                 DBMg.insertArticles(batch);
                 batch.clear();
             }
+        }
+        if (!batch.isEmpty()) {
+            DBMg.insertArticles(batch);
+            batch.clear();
+        }
 
-            qDebug() << "Source" << sourceId << "parsed:" << f.items.size() << "items";
-            qDebug() << ticks++ << " :tick";
-        }
-        catch (const ::exception &ex)
-        {
-            qWarning() << "Feed parse error for source" << sourceId << ":" << ex.what();
-            continue;
-        }
+        qDebug() << "Source" << sourceId << "parsed:" << f.items.size() << "items";
+        return true;
+    } catch (const std::exception& e) {
+        if (err) *err = QString::fromUtf8(e.what());
+        return false;
     }
+}
+
+bool ParseDaemon::parseOneSourceById(int sourceId, QString* errorOut)
+{
+    const QVariantMap src = DBMg.getSourceById(sourceId);
+    if (src.isEmpty()) {
+        if (errorOut) *errorOut = "source_not_found";
+        return false;
+    }
+    feedpp::parser p(/*timeout*/ 7, /*UA*/ "PodolskNews/1.0");
+    return parseOneSourceWithParser(p, src, errorOut);
+}
+
+bool ParseDaemon::setSourceStatus(int sourceId, const QString& status)
+{
+    return DBMg.updateSourceStatus(sourceId, status);
 }

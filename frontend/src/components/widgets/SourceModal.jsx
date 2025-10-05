@@ -1,7 +1,7 @@
 // src/components/SourceModal.jsx
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useAuth } from "@/hooks/auth/AuthProvider";
-import { useSourceVerifySocket } from '@/lib/useSourceVerifySocket';
+import { useWebsocket } from '@/lib/useWebsocket';
 import StatusBadge from "./StatusBadge";
 import Alert from "./Alert";
 
@@ -16,6 +16,7 @@ import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifi
 
 export default function SourceModal({ open, onClose }) {
   const { api } = useAuth();
+
   const sourcesApi = useMemo(() => ({
     async listMySources() { return await (await api.get('/source/my')).json(); },
     async listAllSources() { return await (await api.get('/source/all')).json(); },
@@ -49,21 +50,33 @@ export default function SourceModal({ open, onClose }) {
     }
   }, [sourcesApi]);
 
-  useEffect(() => { if (open) refresh(); }, [open, refresh]);
+  useEffect(() => { if (open) refresh().then(r => r); }, [open, refresh]);
+  
+  
+  const onWsMessage = useCallback((payload) => {
+     if (payload?.source_id) {
+       setMine(prev => prev.map(us => {
+         if (us.source.id !== payload.source_id) return us;
+         return { ...us, source: { ...us.source, status: payload.status }, last_error: payload.error || 'Unknown error' };
+       }));
+     }
+   }, []);
 
-  // WS обновления статусов
-  useSourceVerifySocket((payload) => {
-    // payload: {source_id, status, error?}
-    setMine(prev => prev.map(us => {
-      if (us.source_id === payload.source_id) {
-        const patch = (payload.status === 'ok')
-          ? { source: { ...us.source, status: 'active' }, last_error: null }
-          : { source: { ...us.source, status: 'error' }, last_error: payload.error || 'Unknown error' };
-        return { ...us, ...patch };
-      }
-      return us;
-    }));
+  const { verify } = useWebsocket({
+    wsPath: "/ws",
+    onMessage: onWsMessage,
   });
+
+  const requestVerify = useCallback((sourceId) => {
+     // локально отметим проверку
+     setMine(prev => prev.map(us =>
+       us.source.id === sourceId
+         ? { ...us, source: { ...us.source, status: 'validating' }, last_error: null }
+         : us
+     ));
+     // отправим в /ws
+     verify(sourceId);
+  }, [verify]);
 
   const notSubscribed = useMemo(() => {
     const mineIds = new Set(mine.map(m => m.source_id));
@@ -80,6 +93,7 @@ export default function SourceModal({ open, onClose }) {
       const res = await sourcesApi.createSource({ domain: form.domain, kind: form.kind });
       if (!res?.id) throw new DOMException("Client Error");
       await refresh();
+      verify(res.source.id)
     } catch {
       setOpenError(true);
       setSaving(false);
@@ -88,12 +102,7 @@ export default function SourceModal({ open, onClose }) {
     setSaving(false);
     setTab('mine');
   };
-
-  const updateUserSource = async (userSourceId, patch) => {
-    await sourcesApi.updateUserSource(userSourceId, patch);
-    await refresh();
-  };
-
+  
   // ======== DND only for ACTIVE sources ========
   const isActive = (us) => (us?.source?.status === 'active');
   const sortByRankDesc = (a, b) => (Number(b.rank ?? 0) - Number(a.rank ?? 0)) || (Number(b.id) - Number(a.id));
@@ -147,7 +156,7 @@ export default function SourceModal({ open, onClose }) {
     setMine(previewCombined);
 
     // и сохраним на бэке
-    saveOrder(newActiveOrder);
+    saveOrder(newActiveOrder).then(r => r);
   };
 
   if (!open) return null;
@@ -211,7 +220,7 @@ export default function SourceModal({ open, onClose }) {
                       {inactiveList.map((us, idx) => {
                         const rank = (activeList.length + inactiveList.length) - (activeList.length + idx); // снизу
                         return (
-                          <InactiveRow key={us.id} us={us} rank={rank} />
+                          <InactiveRow key={us.id} us={us} rank={rank} onVerify={requestVerify} />
                         );
                       })}
                     </ul>
@@ -340,7 +349,7 @@ function SortableRow({ us, rank }) {
   );
 }
 
-function InactiveRow({ us, rank }) {
+function InactiveRow({ us, rank, onVerify }) {
   return (
     <li className="bg-white dark:bg-neutral-900 opacity-60">
       <div className="px-3 py-3 flex items-center gap-3">
@@ -357,6 +366,21 @@ function InactiveRow({ us, rank }) {
           <div className="text-sm sm:text-base font-medium truncate">{us?.source?.domain || '—'}</div>
           <div className="text-xs text-neutral-500">{us?.source?.kind} • <StatusBadge status={us?.source?.status} error={us?.last_error} /></div>
         </div>
+        
+        <button
+          type="button"
+          title={us?.source?.status === 'error' ? "Проверить снова" : "Недоступно"}
+          aria-label="Проверить снова"
+          disabled={us?.source?.status !== 'error'}
+          onClick={() => onVerify?.(us?.source?.id)}
+          className={`w-9 h-9 rounded-lg flex items-center justify-center border
+                     ${us?.source?.status === 'error'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700 active:scale-[.98]'
+                        : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'}`}
+        >
+          {/* простая иконка обновления */}
+          <span className="text-base leading-none">↻</span>
+        </button>
       </div>
     </li>
   );

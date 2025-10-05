@@ -272,3 +272,43 @@ bool DBManager::bumpSourcesLastUpdatedRange(int idFrom, int idTo, const QDateTim
     }
     return true;
 }
+
+QVariantMap DBManager::getSourceById(int id) {
+    dbCheck();
+    QVariantMap row;
+    QSqlQuery q(db);
+    q.prepare(R"SQL(
+        SELECT id, domain, last_updated_at
+        FROM public.source
+        WHERE id = :id
+        LIMIT 1
+    )SQL");
+    q.bindValue(":id", id);
+    if (!q.exec()) {
+        qWarning() << "getSourceById failed:" << q.lastError().text();
+        return row;
+    }
+    if (q.next()) {
+        row["id"]              = q.value(0).toInt();
+        row["domain"]          = q.value(1).toString();
+        row["last_updated_at"] = q.value(2).toDateTime();
+    }
+    return row;
+}
+
+bool DBManager::updateSourceStatus(int id, const QString& status) {
+    dbCheck();
+    QSqlQuery q(db);
+    q.prepare(R"SQL(
+        UPDATE public.source
+        SET status = :st
+        WHERE id = :id
+    )SQL");
+    q.bindValue(":st", status);
+    q.bindValue(":id", id);
+    if (!q.exec()) {
+        qWarning() << "updateSourceStatus failed:" << q.lastError().text();
+        return false;
+    }
+    return (q.numRowsAffected() >= 0);
+}

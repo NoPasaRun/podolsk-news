@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import {useAuth} from "@/hooks/auth/AuthProvider.jsx";
 
 
-export function useWebsocket({ wsPath = "/ws", onMessage }) {
+export function useWebsocket({ wsPath = "/ws/", onMessage }) {
   const socketsRef = useRef(new Map()); // key -> WebSocket
   const { api } = useAuth();
 

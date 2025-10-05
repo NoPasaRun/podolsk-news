@@ -63,7 +63,7 @@ export default function SourceModal({ open, onClose }) {
    }, []);
 
   const { verify } = useWebsocket({
-    wsPath: "/ws",
+    wsPath: "/ws/",
     onMessage: onWsMessage,
   });
 

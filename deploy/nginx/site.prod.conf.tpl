@@ -42,8 +42,8 @@ server {
     try_files $uri $uri/ /index.html =404;
   }
 
-  location /ws/ {
-	  proxy_pass         http://127.0.0.1:{{BACKEND_HOST_PORT}}/;
+  location /ws {
+	  proxy_pass         http://127.0.0.1:{{BACKEND_HOST_PORT}};
 
 	  proxy_http_version 1.1;
 	  proxy_set_header   Upgrade $http_upgrade;

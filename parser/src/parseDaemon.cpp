@@ -1,0 +1,187 @@
+#include "parseDaemon.hpp"
+#include <QDebug>
+#include <QtSql/QSqlError>
+
+constexpr int BATCH_SIZE = 50;  //По сколько закидывать новостей в бдшку
+
+ParseDaemon::ParseDaemon(QObject* parent) : QObject(parent) {
+    connect(&timer, &QTimer::timeout, this, &ParseDaemon::tick);
+    
+}
+
+ParseDaemon::~ParseDaemon() {
+    
+    feedpp::parser::global_cleanup();
+}
+
+
+void ParseDaemon::start() {
+    feedpp::parser::global_init();
+    DBMg.open();
+    timer.start(DBMg.config.lazy_time * 1000); //в лази тайм надо указать время в секундах
+    DBMg.demoData();
+    tick(); // сразу первый запуск
+}
+
+
+QString ParseDaemon::languageCheck(QStringView text) //поменять на langdetectcpp .
+{
+    for (QChar ch : text) {
+        if (!ch.isLetter())
+            continue;
+
+        const QChar c = ch.toLower();       // один раз к нижнему регистру
+        const ushort u = c.unicode();
+
+        // --- Русский (кириллица "а".."я" + "ё") ---
+        // 'а'..'я' = 0x0430..0x044F, 'ё' = 0x0451
+        if ((u >= 0x0430 && u <= 0x044F) || u == 0x0451)
+            return QStringLiteral("ru");
+
+        // --- Немецкий маркёры: ä ö ü ß ---
+        if (u == 0x00E4 || u == 0x00F6 || u == 0x00FC || u == 0x00DF)
+            return QStringLiteral("german");
+
+        // --- Испанский маркёры: ñ á é í ó ú ---
+        if (u == 0x00F1 || u == 0x00E1 || u == 0x00E9 ||
+            u == 0x00ED || u == 0x00F3 || u == 0x00FA)
+            return QStringLiteral("spanish");
+
+        // --- Базовая латиница (английский) ---
+        if (u >= 'a' && u <= 'z')
+            return QStringLiteral("english");
+
+        // Если попали сюда — буква не из наших маркёров, идём дальше.
+    }
+
+    // Фолбэк как у тебя
+    return QStringLiteral("russian");
+}
+
+
+QDateTime parsePublishedAtUtc(const feedpp::item& it) {
+    auto okRange = [](const QDateTime& d){
+        return d.isValid() && d.date().year() >= 1990 && d.date().year() <= 2100;
+    };
+
+    // 1) Текстовая дата
+    if (!it.pubDate.empty()) {
+        const QString s = QString::fromStdString(it.pubDate).trimmed();
+        QDateTime dt = QDateTime::fromString(s, Qt::RFC2822Date);
+        if (!dt.isValid()) dt = QDateTime::fromString(s, Qt::ISODate);
+        if (!dt.isValid()) dt = QDateTime::fromString(s, Qt::ISODateWithMs); // ← добавили
+        if (okRange(dt)) return dt.toUTC();
+    }
+
+    // 2) Числовой timestamp (s/ms/µs/ns)
+    if (it.pubDate_ts > 0) {
+        const qint64 v = static_cast<qint64>(it.pubDate_ts);
+        QDateTime dt;
+        if      (v >= 1'000'000'000'000'000'000LL) dt = QDateTime::fromMSecsSinceEpoch(v / 1'000'000, Qt::UTC); // ns→ms
+        else if (v >=     100'000'000'000'000LL)   dt = QDateTime::fromMSecsSinceEpoch(v / 1'000,     Qt::UTC); // µs→ms
+        else if (v >=       1'000'000'000'000LL)   dt = QDateTime::fromMSecsSinceEpoch(v,             Qt::UTC); // ms
+        else                                       dt = QDateTime::fromSecsSinceEpoch(v,              Qt::UTC); // s
+        if (okRange(dt)) return dt;
+    }
+
+    // 3) Фолбэк
+    return QDateTime::currentDateTimeUtc();
+}
+
+static int ticks = 0;
+
+void ParseDaemon::tick() {
+    qDebug() << "tick";
+
+    for (;;) // КОРОЧЕ ЦИКЛА ТУТ НЕ ПРОИСХОДИТ, СНИЗУ БРИК А СУРСЫ МЫ ПОЛУЧАЕМ ВСЕ
+    {
+        
+        const QList<QVariantMap> sources = DBMg.listRssSourcesRange(0, 100000);
+        DBMg.bumpSourcesLastUpdatedRange(0, 100000, QDateTime::currentDateTimeUtc());
+        if (sources.isEmpty()) {
+            qDebug() << "No RSS sources";
+            return;
+        }
+
+        parceSources(sources);
+
+        break;
+    }
+}
+
+void ParseDaemon::parceSources(const QList<QVariantMap> &sources)
+{
+    feedpp::parser p(/*timeout*/ 7, /*UA*/ "PodolskNews/1.0"); 
+    
+
+    for (const auto &src : sources)
+    {
+
+  
+        const int sourceId = src.value("id").toInt();
+        const QString feedUrl = src.value("domain").toString();
+        QDateTime lastUpdate = src.value("last_updated_at").toDateTime();
+
+
+        try
+        {
+            // парсим фид
+            feedpp::feed f = p.parse_url(feedUrl.toStdString());
+
+            const QString feedLang = {languageCheck(QString::fromStdString(f.title))};
+
+            QList<QVariantMap> batch;
+            batch.reserve(BATCH_SIZE);
+
+            // 2.2 конвертим items -> строки для БД
+            for (const auto &it : f.items)
+            {
+                QDateTime feedPublishedAt = parsePublishedAtUtc(it);
+
+                // фильтр: только новее последнего апдейта источника
+                if (lastUpdate.isValid() && !(feedPublishedAt > lastUpdate)) {
+                    static int oldNews = 0;
+                    qDebug() << "Новость древняя, пропускаем " << oldNews++;
+                    continue;
+                }
+
+                QVariantMap row{
+                    {"url",                 QString::fromStdString(it.link)},
+                    {"url_image",           QString::fromStdString(it.enclosure_url)},
+                    {"url_type",            QString::fromStdString(it.enclosure_type)},
+                    {"title",               QString::fromStdString(it.title)},
+                    {"summary",             QString::fromStdString(it.description)},
+                    {"guid",                QString::fromStdString(it.guid)},
+                    {"published_at",        feedPublishedAt},
+                    {"language",            feedLang},
+                    {"content_fingerprint", QString()},                      // placeholder
+                    {"source_id",           sourceId}
+                };
+
+
+                batch.push_back(std::move(row));
+
+                if (batch.size() == BATCH_SIZE)
+                {
+                    DBMg.insertArticles(batch);
+                    batch.clear();
+                }
+            }
+
+            // Хвост
+            if (!batch.isEmpty())
+            {
+                DBMg.insertArticles(batch);
+                batch.clear();
+            }
+
+            qDebug() << "Source" << sourceId << "parsed:" << f.items.size() << "items";
+            qDebug() << ticks++ << " :tick";
+        }
+        catch (const ::exception &ex)
+        {
+            qWarning() << "Feed parse error for source" << sourceId << ":" << ex.what();
+            continue;
+        }
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "C_Cpp.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/parser/build/compile_commands.json",
+  
+    "cmake.sourceDirectory": "${workspaceFolder}/parser",
+    "cmake.buildDirectory":  "${workspaceFolder}/parser/build",
+    "cmake.configureSettings": {
+      "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+    },
+  
+    "files.exclude": { "**/*_autogen/**": true },
+    "C_Cpp.files.exclude": { "**/*_autogen/**": true }
+  }
+  

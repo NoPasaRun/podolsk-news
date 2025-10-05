@@ -1,0 +1,48 @@
+name: Deploy (pull+make prod-up)
+
+on:
+  push:
+    branches: [ "master" ]
+
+concurrency:
+  group: deploy-master
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HOST: ${{ secrets.PROD_HOST }}
+      USER: ${{ secrets.PROD_USER }}
+      SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+      PROJECT_DIR: ${{ secrets.PROD_PROJECT_DIR }}
+    steps:
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${SSH_PORT:-22}" "${HOST}" >> ~/.ssh/known_hosts
+
+      - name: Pull & make prod-up on server
+        shell: bash
+        run: |
+          # проверим, что переменные заданы
+          : "${HOST:?SECRET PROD_HOST is empty}"
+          : "${USER:?SECRET PROD_USER is empty}"
+          : "${PROJECT_DIR:?SECRET PROD_PROJECT_DIR is empty}"
+          PORT="${SSH_PORT:-22}"
+
+          # выполняем, подставляя значения на локальной стороне (двойные кавычки снаружи)
+          ssh -p "$PORT" "${USER}@${HOST}" "bash -lc 'set -euo pipefail; \
+            cd \"${PROJECT_DIR}\"; \
+            git reset --hard; \
+            git fetch --prune; \
+            git checkout master; \
+            git pull --ff-only; \
+            make fe-build; \
+            make prod-up; \
+            docker compose ps'"

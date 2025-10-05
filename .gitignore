@@ -9,3 +9,4 @@ dist
 parser/models/
 models/
 *.gguf
+config.json

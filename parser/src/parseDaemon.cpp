@@ -24,7 +24,7 @@ void ParseDaemon::start() {
 }
 
 
-QString ParseDaemon::languageCheck(QStringView text) //поменять на langdetectcpp .
+QString ParseDaemon::languageCheck(QStringView text)
 {
     for (QChar ch : text) {
         if (!ch.isLetter())

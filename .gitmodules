@@ -1,3 +1,0 @@
-[submodule "parser/llama.cpp"]
-	path = parser/llama.cpp
-	url = https://github.com/ggerganov/llama.cpp

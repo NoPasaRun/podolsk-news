@@ -90,7 +90,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="auth required")
 
     return await get_user(
-        creds.credentials, Exception,
+        creds.credentials,
         status_code=status.HTTP_403_FORBIDDEN,
         detail="forbidden"
     )

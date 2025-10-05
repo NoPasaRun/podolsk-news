@@ -119,7 +119,6 @@ void ParseDaemon::parceSources(const QList<QVariantMap> &sources)
         if (!parseOneSourceWithParser(p, src, &err)) {
             const int sid = src.value("id").toInt();
             qWarning() << "Feed parse error for source" << sid << ":" << err;
-            // можно тут ставить статус error, но оставлю решение сервису
         }
     }
 }
@@ -142,7 +141,7 @@ bool ParseDaemon::parseOneSourceWithParser(feedpp::parser& p,
         for (const auto &it : f.items) {
             const QDateTime feedPublishedAt = parsePublishedAtUtc(it);
             if (lastUpdate.isValid() && !(feedPublishedAt > lastUpdate)) {
-                continue; // только свежее
+                continue;
             }
 
             QVariantMap row{

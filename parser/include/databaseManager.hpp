@@ -27,7 +27,7 @@ public:
     QString getGlobalSourcesJson();
 
     void demoData();
-    void insertDemoSource();
+    void insertDemoSource() ;
 
     QVariantMap getSourceById(int id);
     bool updateSourceStatus(int id, const QString& status);

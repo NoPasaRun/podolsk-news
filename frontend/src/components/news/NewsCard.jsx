@@ -81,7 +81,7 @@ export default function NewsCard({
               <ul className="mt-3 space-y-2 border-t pt-3">
                   {others.map((it) => (
                       <li key={it.id} className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 mb-5">
+                          <div className="min-w-0 mb-5">
                               <a href={it.url} target="_blank" rel="noreferrer"
                                  className="text-sm hover:underline break-all">
                                   {it.title || it.url}

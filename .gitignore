@@ -4,3 +4,8 @@ node_modules
 .git
 podolsk-news.conf
 dist
+*/build
+# models
+parser/models/
+models/
+*.gguf

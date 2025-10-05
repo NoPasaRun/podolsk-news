@@ -39,7 +39,6 @@ WORKDIR /src
 COPY CMakeLists.txt .
 COPY include ./include
 COPY src ./src
-COPY res ./res
 COPY feedpplib ./feedpplib
 COPY llama.cpp ./llama.cpp
 COPY models/ /src/models/
@@ -48,6 +47,8 @@ RUN cmake -S . -B /build \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_PREFIX_PATH="/usr/local/lib/cmake" \
 	&& cmake --build /build -j
+
+COPY res ./res
 
 # ===== Runtime =====
 FROM debian:12 AS runner

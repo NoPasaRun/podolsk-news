@@ -66,7 +66,6 @@ QDateTime parsePublishedAtUtc(const feedpp::item& it) {
 
     // 1) Текстовая дата
     if (!it.pubDate.empty()) {
-    	qWarning() << "[ReactService] shit " << it.pubDate;
         const QString s = QString::fromStdString(it.pubDate).trimmed();
         QDateTime dt = QDateTime::fromString(s, Qt::RFC2822Date);
         if (!dt.isValid()) dt = QDateTime::fromString(s, Qt::ISODate);

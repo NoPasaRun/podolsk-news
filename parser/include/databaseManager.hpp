@@ -1,13 +1,27 @@
 #pragma once
-
 #include <QtSql/QSqlDatabase>
 #include <QtSql/QSqlQuery>
 #include <QtSql/QSqlError>
 #include <QString>
 #include <QVariant>
+#include <QDateTime>          
 #include <vector>
 #include <string>
 #include "config.hpp"
+#include "topics_enum.hpp"
+
+struct ArticleInsertResult {   
+    int   clusterId = 0;
+    int   articleId = 0;
+    double score    = 0.0;
+    bool  matched   = false;
+    bool  createdNew= false;
+};
+
+struct TopicRow {
+    int id;
+    QString title;
+};
 
 class DBManager {
 public:
@@ -32,6 +46,14 @@ public:
     QVariantMap getSourceById(int id);
     bool updateSourceStatus(int id, const QString& status);
 
+    QVector<TopicRow> listTopics();
+    bool upsertClusterTopics(int clusterId,
+                            const QVector<TopicScore> &scores,
+                            int maxTopics = 3,
+                            double minScore = 0.15,
+                            bool replace = false);
+                            
+    QVector<ArticleInsertResult> insertArticlesDetailed(const QList<QVariantMap> &rows);
     bool bumpSourcesLastUpdatedRange(int idFrom, int idTo, const QDateTime &ts);
 
     QVector<int> insertArticles(const QList<QVariantMap> &rows);

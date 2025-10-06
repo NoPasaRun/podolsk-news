@@ -12,6 +12,10 @@
 #include <QString>
 #include <QVariantMap>
 
+class LlmTopics;
+#include "llm_topics.hpp"
+#include "topics_enum.hpp"
+
 struct Source {
     int id;
     std::string url;
@@ -38,7 +42,17 @@ private slots:
 
     QString languageCheck(QStringView text);
     friend QDateTime parsePublishedAtUtc(const struct feedpp::item& it);
+    void classifyNewClustersSingle(const QVector<ArticleInsertResult>& results,
+                                   const QList<QVariantMap>& rows,
+                                   const QString& lang);
 private:
     QTimer timer;
     DBManager DBMg;
+    LlmTopics* llmTopics_ = nullptr;
+
+    QStringList topicLabels_;
+    QHash<QString,int> topicKeyToId_;
+
+    static QString normKey(const QString& s);
+    
 };

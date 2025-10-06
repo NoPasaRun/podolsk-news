@@ -21,6 +21,7 @@ add_compile_options(-Wno-multichar)
 set(MODELS_DIR "${CMAKE_SOURCE_DIR}/models")
 set(MODEL_FILE "qwen2.5-0.5b-instruct-q4_k_m.gguf")
 set(MODEL_URL  "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/${MODEL_FILE}")
+        
 set(MODEL_PATH "${MODELS_DIR}/${MODEL_FILE}")
 
 file(MAKE_DIRECTORY "${MODELS_DIR}")
@@ -77,6 +78,8 @@ add_custom_target(copy_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/res $<TARGET_FILE_DIR:${PROJECT_NAME}>/res
 )
+
+
 
 get_target_property(_autogen_dir ${PROJECT_NAME} AUTOGEN_BUILD_DIR)
 if(_autogen_dir)

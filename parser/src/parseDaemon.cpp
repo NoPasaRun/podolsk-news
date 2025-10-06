@@ -12,15 +12,33 @@ ParseDaemon::ParseDaemon(QObject* parent) : QObject(parent) {
 ParseDaemon::~ParseDaemon() {
     
     feedpp::parser::global_cleanup();
+    delete llmTopics_; llmTopics_ = nullptr;
 }
 
 
 void ParseDaemon::start() {
     feedpp::parser::global_init();
     DBMg.open();
-    timer.start(DBMg.config.lazy_time * 1000); //в лази тайм надо указать время в секундах
+
+    // 1) грузим темы из БД и строим кэш
+    topicLabels_.clear();
+    topicKeyToId_.clear();
+    for (const auto &r : DBMg.listTopics()) {
+        topicLabels_ << r.title;
+        topicKeyToId_.insert(normKey(r.title), r.id);
+    }
+    if (topicLabels_.isEmpty())
+        qWarning() << "[ParseDaemon] topic table is empty – classification will be skipped";
+
+    // 2) LLM
+    llmTopics_ = new LlmTopics(LlmTopics::Options{});
+    if (!llmTopics_->init())
+        qWarning() << "LLM (topics) init failed";
+
+    // дальше как было...
+    timer.start(DBMg.config.lazy_time * 1000);
     DBMg.demoData();
-    tick(); // сразу первый запуск
+    tick();
 }
 
 
@@ -159,12 +177,13 @@ bool ParseDaemon::parseOneSourceWithParser(feedpp::parser& p,
 
             batch.push_back(std::move(row));
             if (batch.size() >= 50) {
-                DBMg.insertArticles(batch);
+                DBMg.insertArticlesDetailed(batch);
                 batch.clear();
             }
         }
         if (!batch.isEmpty()) {
-            DBMg.insertArticles(batch);
+            auto results = DBMg.insertArticlesDetailed(batch);     // ← было insertArticles
+            classifyNewClustersSingle(results, batch, /*lang*/ feedLang);
             batch.clear();
         }
 
@@ -190,4 +209,51 @@ bool ParseDaemon::parseOneSourceById(int sourceId, QString* errorOut)
 bool ParseDaemon::setSourceStatus(int sourceId, const QString& status)
 {
     return DBMg.updateSourceStatus(sourceId, status);
+}
+
+void ParseDaemon::classifyNewClustersSingle(const QVector<ArticleInsertResult>& results,
+                                            const QList<QVariantMap>& rows,
+                                            const QString& lang) {
+    if (!llmTopics_ || topicLabels_.isEmpty()) return;
+
+    const int n = std::min(results.size(), rows.size());
+
+    for (int i = 0; i < n; ++i) {
+        const auto& r = results[i];
+        if (!r.createdNew) continue; // только для новых кластеров
+
+        const auto& row = rows[i];
+        QString text = (row.value("title").toString() + ". " +
+                        row.value("summary").toString()).trimmed();
+        if (text.isEmpty()) text = row.value("title").toString();
+        if (text.isEmpty()) continue;
+
+        // 1) скорим по БД-шному списку title
+        auto scored = llmTopics_->scoreLabels(text, topicLabels_, lang);
+        if (scored.isEmpty()) continue;
+
+        // 2) берём ТОП-3 и сопоставляем с id
+        QVector<TopicScore> toSave;
+        const int cap = std::min<int>(3, scored.size());
+        toSave.reserve(cap);
+
+        int kept = 0;
+        for (int j = 0; j < scored.size() && kept < cap; ++j) {
+            const auto &sl = scored[j];
+            const int tid = topicKeyToId_.value(normKey(sl.label), -1);
+            if (tid <= 0) continue;   // неизвестный label — пропускаем
+            toSave.push_back(TopicScore{ tid, sl.score, kept == 0 });
+            ++kept;
+        }
+
+        if (!toSave.isEmpty())
+            DBMg.upsertClusterTopics(r.clusterId, toSave);
+    }
+}
+
+
+QString ParseDaemon::normKey(const QString& s) {
+    QString t = s.trimmed().toLower();
+    t.remove(' '); t.remove('_'); t.remove('-');
+    return t;
 }

@@ -1,0 +1,161 @@
+// parser/src/llm_topics.cpp
+#include "llm_topics.hpp"
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
+#include <QRegularExpression>
+#include <algorithm>
+#include <cmath>
+#include <unistd.h>
+
+static const char* kAllTopicsCSV =
+"Politics,Business,Tech,Science,Health,Sports,Entertainment,World,Local,Culture,Education,Travel,Auto,Finance,Real_estate,Crime,War";
+
+int LlmTopics::detectThreads() {
+#ifdef _SC_NPROCESSORS_ONLN
+    long n = ::sysconf(_SC_NPROCESSORS_ONLN);
+    return n>0 ? int(n) : 4;
+#else
+    return 4;
+#endif
+}
+std::string LlmTopics::toStd(const QString& s) {
+    const QByteArray b = s.toUtf8();
+    return std::string(b.constData(), size_t(b.size()));
+}
+LlmTopics::~LlmTopics(){ destroy(); }
+
+bool LlmTopics::init(){
+    if (model_) return true;
+    if (opt_.n_threads<=0) opt_.n_threads = detectThreads();
+
+    llama_backend_init();
+    llama_model_params mp = llama_model_default_params();
+    model_ = llama_model_load_from_file(toStd(opt_.modelPath).c_str(), mp);
+    if (!model_) return false;
+
+    llama_context_params cp = llama_context_default_params();
+    cp.n_ctx = opt_.n_ctx;
+    cp.n_threads = opt_.n_threads;
+    ctx_ = llama_init_from_model(model_, cp);
+    if (!ctx_) return false;
+
+    vocab_ = llama_model_get_vocab(model_);
+    return true;
+}
+
+void LlmTopics::destroy(){
+    if (ctx_)   { llama_free(ctx_); ctx_ = nullptr; }
+    if (model_) { llama_free_model(model_); model_ = nullptr; }
+    vocab_ = nullptr;
+}
+
+QString LlmTopics::generate(const QString& prompt){
+    // tokenize prompt
+    const std::string sp = toStd(prompt);
+    int32_t need = llama_tokenize(vocab_, sp.c_str(), (int32_t)sp.size(),
+                                  nullptr, 0, /*add_bos*/true, /*special*/true);
+    if (need<=0) return {};
+
+    std::vector<llama_token> tok(need);
+    llama_tokenize(vocab_, sp.c_str(), (int32_t)sp.size(),
+                   tok.data(), (int32_t)tok.size(), true, true);
+
+    llama_batch b = llama_batch_init((int32_t)tok.size(), 0, 1);
+    for (int i=0;i<(int)tok.size();++i) llama_batch_add(b, tok[i], i, {0}, true);
+    if (llama_decode(ctx_, b)!=0) { llama_batch_free(b); return {}; }
+    llama_batch_free(b);
+    int n_past = (int)tok.size();
+
+    QString out;
+    for (int t=0; t<opt_.max_tokens; ++t) {
+        const float* logits = llama_get_logits_ith(ctx_, -1);
+        const int n_vocab = llama_vocab_n_tokens(vocab_);
+
+        int best = 0; float bestv = logits[0];
+        for (int i=1;i<n_vocab;++i) if (logits[i]>bestv){ bestv=logits[i]; best=i; }
+
+        const llama_token eos = llama_vocab_eos(vocab_);
+        if (best == eos) break;
+
+        const char* piece = llama_vocab_get_text(vocab_, best);
+        if (!piece) break;
+        out += QString::fromUtf8(piece);
+        if (out.contains('}')) break;
+
+        llama_batch one = llama_batch_init(1, 0, 1);
+        llama_batch_add(one, best, n_past, {0}, true);
+        n_past += 1;
+        if (llama_decode(ctx_, one)!=0) { llama_batch_free(one); break; }
+        llama_batch_free(one);
+    }
+    return out;
+}
+
+QVector<TopicScore> LlmTopics::scoreTopics(const QString& text, const QString& lang){
+    QVector<TopicScore> result;
+    if (!ctx_) return result;
+
+    QString prompt = u8R"(Классифицируй новостной текст по фиксированным темам.
+Верни СТРОГО один объект JSON БЕЗ комментариев и лишних полей, где ключи — ровно эти темы:
+[)"
+        + QString::fromUtf8(kAllTopicsCSV) +
+        u8R"(]
+Значения — числа от 0 до 1, сумма ≈ 1. Пример:
+{"Politics":0.30,"Business":0.05, ... }
+
+Текст (язык: )" + lang + u8R"() :
+"""
+)" + text.left(2500) + u8R"("
+)";
+
+    const QString raw = generate(prompt);
+
+    // собрать каркас с нулями
+    QMap<QString,double> m;
+    for (int id=1; id<=T_COUNT; ++id)
+        m[kTopicLabelById[id]] = 0.0;
+
+    // попытка парсинга JSON
+    QJsonParseError perr{};
+    const auto doc = QJsonDocument::fromJson(raw.toUtf8(), &perr);
+    if (perr.error == QJsonParseError::NoError && doc.isObject()) {
+        const auto obj = doc.object();
+        for (auto it = obj.begin(); it != obj.end(); ++it) {
+            const QString k = it.key();
+            if (!m.contains(k)) continue;
+            if (it->isDouble()) m[k] = std::max(0.0, std::min(1.0, it->toDouble()));
+        }
+    } else {
+        // fallback: попытка выдёргивания "Topic":number
+        QRegularExpression re(R"REGEX("([A-Za-z_]+)"\s*:\s*([0-9]*\.?[0-9]+))REGEX");
+        auto it = re.globalMatch(raw);
+        while (it.hasNext()) {
+            const auto mth = it.next();
+            const QString k = mth.captured(1);
+            const double v = mth.captured(2).toDouble();
+            if (m.contains(k)) m[k] = std::max(0.0, std::min(1.0, v));
+        }
+    }
+
+    // нормализация
+    double sum = 0.0;
+    for (auto v : m.values()) sum += v;
+    if (sum <= 0) {
+        // если всё по нулям — отдаём равномерно
+        for (auto &v : m) v = 1.0 / double(T_COUNT);
+        sum = 1.0;
+    } else {
+        for (auto &v : m) v = v / sum;
+    }
+
+    // собрать вектор + primary
+    int bestId = 1; double bestScore = -1.0;
+    for (int id=1; id<=T_COUNT; ++id) {
+        const double s = m[kTopicLabelById[id]];
+        if (s > bestScore) { bestScore = s; bestId = id; }
+        result.push_back(TopicScore{ id, s, false });
+    }
+    for (auto &ts : result) ts.primary = (ts.topic_id == bestId);
+    return result;
+}

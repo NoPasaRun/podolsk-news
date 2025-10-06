@@ -8,11 +8,12 @@ from routes.auth import router as auth_router
 from routes.news import router as news_router
 from routes.user import router as user_router
 from routes.source import router as source_router
+from routes.telemetry import router as telemetry_router
 from ws.source import source_ws
 from settings import settings
 
 from fastapi.openapi.utils import get_openapi
-from subscriber.asyncio import Redis, ConnectionPool
+from redis.asyncio import Redis, ConnectionPool
 
 from utils.redis import RedisBroker
 
@@ -78,4 +79,5 @@ app.include_router(auth_router)
 app.include_router(news_router)
 app.include_router(user_router)
 app.include_router(source_router)
+app.include_router(telemetry_router)
 app.add_websocket_route("/ws/", source_ws)

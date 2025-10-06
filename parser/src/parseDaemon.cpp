@@ -1,4 +1,5 @@
 #include "parseDaemon.hpp"
+#include "topic_assigner.hpp"
 #include <QDebug>
 #include <QtSql/QSqlError>
 
@@ -10,7 +11,7 @@ ParseDaemon::ParseDaemon(QObject* parent) : QObject(parent) {
 }
 
 ParseDaemon::~ParseDaemon() {
-    
+    delete topicAssigner; topicAssigner = nullptr;
     feedpp::parser::global_cleanup();
 }
 
@@ -18,6 +19,7 @@ ParseDaemon::~ParseDaemon() {
 void ParseDaemon::start() {
     feedpp::parser::global_init();
     DBMg.open();
+    topicAssigner = new TopicAssigner(DBMg);
     timer.start(DBMg.config.lazy_time * 1000); //в лази тайм надо указать время в секундах
     DBMg.demoData();
     tick(); // сразу первый запуск
@@ -138,6 +140,9 @@ bool ParseDaemon::parseOneSourceWithParser(feedpp::parser& p,
         QList<QVariantMap> batch;
         batch.reserve(50);
 
+        // будем копить затронутые кластеры
+        QSet<int> touchedClusters;
+
         for (const auto &it : f.items) {
             const QDateTime feedPublishedAt = parsePublishedAtUtc(it);
             if (lastUpdate.isValid() && !(feedPublishedAt > lastUpdate)) {
@@ -159,13 +164,20 @@ bool ParseDaemon::parseOneSourceWithParser(feedpp::parser& p,
 
             batch.push_back(std::move(row));
             if (batch.size() >= 50) {
-                DBMg.insertArticles(batch);
+                auto res = DBMg.insertArticles(batch);
+                for (const auto& r : res) if (r.clusterId > 0) touchedClusters.insert(r.clusterId);
                 batch.clear();
             }
         }
         if (!batch.isEmpty()) {
-            DBMg.insertArticles(batch);
+            auto res = DBMg.insertArticles(batch);
+            for (const auto& r : res) if (r.clusterId > 0) touchedClusters.insert(r.clusterId);
             batch.clear();
+        }
+
+        // Назначаем темы всем затронутым кластерам
+        if (topicAssigner && !touchedClusters.isEmpty()) {
+            topicAssigner->assignForClusters(touchedClusters);
         }
 
         qDebug() << "Source" << sourceId << "parsed:" << f.items.size() << "items";

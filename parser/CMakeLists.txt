@@ -64,6 +64,10 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp
 )
 
+target_compile_definitions(${PROJECT_NAME}
+    PRIVATE LLM_MODEL_PATH_STR="${LLM_MODEL_PATH}"
+)
+
 target_link_libraries(${PROJECT_NAME}
     PRIVATE feedpp
     PRIVATE Qt6::Core

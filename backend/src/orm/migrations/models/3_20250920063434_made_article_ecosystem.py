@@ -60,7 +60,7 @@ COMMENT ON TABLE "cluster" IS 'Инфоповод = группа похожих 
         CREATE TABLE IF NOT EXISTS "clustertopic" (
     "id" SERIAL NOT NULL PRIMARY KEY,
     "score" DOUBLE PRECISION NOT NULL  DEFAULT 0,
-    "primary" BOOL NOT NULL  DEFAULT False,
+    "is_primary" BOOL NOT NULL  DEFAULT False,
     "cluster_id" INT NOT NULL REFERENCES "cluster" ("id") ON DELETE CASCADE,
     "topic_id" INT NOT NULL REFERENCES "topic" ("id") ON DELETE CASCADE,
     CONSTRAINT "uid_clustertopi_cluster_29b689" UNIQUE ("cluster_id", "topic_id")

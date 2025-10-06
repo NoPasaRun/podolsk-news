@@ -74,7 +74,7 @@ export default function NewsList({ items: initialItems }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-      {items.map((it) => (
+      {items.map((it, index) => (
         <NewsCard
           key={it.cluster_id}
           item={it}
@@ -83,6 +83,7 @@ export default function NewsList({ items: initialItems }) {
           onCopyLink={copyLink}
           onToggleBookmark={toggleBookmark}
           onToggleRead={toggleRead}
+          index={index}
         />
       ))}
       <Alert

@@ -2,6 +2,7 @@
 import { useMemo } from 'react';
 import Time from "@/components/ui/Time.jsx";
 import PrettyImage from "@/components/ui/Image.jsx";
+import {useNewsCard} from "@/telemetry/useNewsCard.jsx";
 
 export default function NewsCard({
   item,              // { cluster_id, article, other_articles, is_bookmarked, is_read }
@@ -10,6 +11,7 @@ export default function NewsCard({
   onToggleBookmark,  // (clusterId, nextValue) => Promise<void>
   onToggleRead,      // (clusterId, nextValue) => Promise<void>
   onCopyLink,
+  index
 }) {
   const main = item.article;
   const others = item.other_articles;
@@ -17,11 +19,19 @@ export default function NewsCard({
   const isRead = !!item.read;
   const image = [main, ...others].find(el => !!el.image)?.image;
 
+  const meta = {
+    cluster_id: item.cluster_id,
+    article_id: main.id,
+    source_id: main.source_id,
+    position: index,
+  };
+  const { ref, handleCardClick, handleLinkClick } = useNewsCard(meta);
+
   return (
-      <div className="border rounded-2xl p-4 bg-white dark:bg-neutral-900 shadow-sm flex flex-col justify-between overflow-hidden">
+      <div ref={ref} onClick={handleCardClick} className="border rounded-2xl p-4 bg-white dark:bg-neutral-900 shadow-sm flex flex-col justify-between overflow-hidden">
           <div>
               <div className="mb-2">
-                  <a href={main.url} target="_blank" rel="noreferrer"
+                  <a href={main.url} onClick={handleLinkClick} target="_blank" rel="noreferrer"
                      className="text-lg font-semibold hover:underline">
                       {main.title}
                   </a>
@@ -82,7 +92,7 @@ export default function NewsCard({
                   {others.map((it) => (
                       <li key={it.id} className="flex items-start justify-between gap-3">
                           <div className="min-w-0 mb-5">
-                              <a href={it.url} target="_blank" rel="noreferrer"
+                              <a href={it.url} onClick={handleLinkClick} target="_blank" rel="noreferrer"
                                  className="text-sm hover:underline break-all">
                                   {it.title || it.url}
                               </a>

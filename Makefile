@@ -21,7 +21,7 @@ ENV	?=	dev
 
 
 # -------- Phony targets --------
-.PHONY: dev-up dev-down logs-be sh-be sh-fe \
+.PHONY: dev-up dev-down logs-be sh-be sh-fe load-model \
         prod-up prod-down prod-logs fe-build logs-pa logs-tg \
         prod-nginx-disable prod-nginx-enable prod-nginx-cert ips
 
@@ -49,6 +49,9 @@ sh-be:
 
 sh-fe:
 	docker compose exec frontend bash
+
+load-model:
+	wget https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf -O parser/models/qwen2.5-0.5b-instruct-q4_k_m.gguf
 
 # -------- PROD (host nginx, static frontend, dockerized API/DB) --------
 prod-up:

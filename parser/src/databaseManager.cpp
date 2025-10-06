@@ -1,4 +1,5 @@
 #include "databaseManager.hpp"
+#include <QRegularExpression>
 #include <QDebug>
 
 DBManager::DBManager(const QString& driver) {
@@ -18,6 +19,25 @@ void DBManager::dbCheck()
         qWarning() << "DB not open";
         return;
     }
+}
+
+void DBManager::ensureTopicTitleUniqueIndex() {
+    QSqlQuery q(db);
+    // делаем title уникальным, чтобы не плодить записи
+    // если индекс уже есть — ошибок не будет
+    q.exec(R"SQL(
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND indexname = 'idx_topic_title_unique'
+            ) THEN
+                CREATE UNIQUE INDEX idx_topic_title_unique ON public.topic (title);
+            END IF;
+        END$$;
+    )SQL");
 }
 
 bool DBManager::open() {
@@ -50,7 +70,7 @@ bool DBManager::open() {
     else 
     {
         qDebug() << "db connect OK";
-
+		ensureTopicTitleUniqueIndex();
     }
 
     return true;
@@ -106,10 +126,10 @@ QList<QVariantMap> DBManager::listRssSourcesRange(int idFrom, int idTo) {
 
    
 
-QVector<int> DBManager::insertArticles(const QList<QVariantMap>& rows) {
+QVector<ArticleInsertResult> DBManager::insertArticles(const QList<QVariantMap>& rows) {
     dbCheck();
-    QVector<int> ids; ids.reserve(rows.size());
-    if (rows.isEmpty()) return ids;
+    QVector<ArticleInsertResult> results; results.reserve(rows.size());
+    if (rows.isEmpty()) return results;
 
     if (!db.transaction()) {
         qWarning() << "[insertArticles] tx begin failed:" << db.lastError().text();
@@ -117,7 +137,6 @@ QVector<int> DBManager::insertArticles(const QList<QVariantMap>& rows) {
     }
 
     QSqlQuery q(db);
-    // Важно: используем DEFAULT для хвостовых параметров функции (recency/веса/пороги)
     q.prepare(R"SQL(
         SELECT
             out_cluster_id,
@@ -139,28 +158,22 @@ QVector<int> DBManager::insertArticles(const QList<QVariantMap>& rows) {
     )SQL");
 
     for (const auto& r : rows) {
-        // Обязательные
         q.bindValue(":p_source_id",  r.value("source_id"));
         q.bindValue(":p_url",        r.value("url"));
         q.bindValue(":p_title",      r.value("title"));
 
-        // Необязательные
-        // image
         if (r.contains("url_image") && !r.value("url_image").isNull())
             q.bindValue(":p_image", r.value("url_image"));
         else
-            q.bindValue(":p_image", QVariant(QVariant::String)); // NULL
+            q.bindValue(":p_image", QVariant(QVariant::String));
 
-        // summary
         if (r.contains("summary") && !r.value("summary").isNull())
             q.bindValue(":p_summary", r.value("summary"));
         else
-            q.bindValue(":p_summary", QVariant(QVariant::String)); // NULL
+            q.bindValue(":p_summary", QVariant(QVariant::String));
 
         q.bindValue(":p_published_at",  r.value("published_at").toDateTime());
-        
 
-        // language
         if (r.contains("language") && !r.value("language").isNull())
             q.bindValue(":p_language", r.value("language"));
         else
@@ -173,28 +186,29 @@ QVector<int> DBManager::insertArticles(const QList<QVariantMap>& rows) {
             db.rollback();
             return {};
         }
-
         if (!q.next()) {
-            // функция должна вернуть одну строку; если нет — это аномалия
             qWarning() << "[insertArticles] no row returned for url=" << r.value("url");
             q.finish();
             db.rollback();
             return {};
         }
 
-        // Колонки: 0=cluster_id, 1=article_id, 2=score, 3=matched, 4=created_new
-        const int articleId = q.value(1).toInt();
-        ids.push_back(articleId);
+        ArticleInsertResult one;
+        one.clusterId  = q.value(0).toInt();
+        one.articleId  = q.value(1).toInt();
+        one.score      = q.value(2).toDouble();
+        one.matched    = q.value(3).toBool();
+        one.createdNew = q.value(4).toBool();
+        results.push_back(one);
 
-        q.finish(); // обязательно чистим курсор перед следующим bind'ом
+        q.finish();
     }
 
     if (!db.commit()) {
         qWarning() << "[insertArticles] commit failed:" << db.lastError().text();
         return {};
     }
-
-    return ids;
+    return results;
 }
 
 
@@ -311,4 +325,90 @@ bool DBManager::updateSourceStatus(int id, const QString& status) {
         return false;
     }
     return (q.numRowsAffected() >= 0);
+}
+
+QList<QVariantMap> DBManager::getClusterArticles(int clusterId, int limit) const {
+    QList<QVariantMap> out;
+    QSqlQuery q(db);
+    q.prepare(R"SQL(
+        SELECT title, summary
+        FROM public.article
+        WHERE cluster_id = :cid
+        ORDER BY published_at DESC
+        LIMIT :lim
+    )SQL");
+    q.bindValue(":cid", clusterId);
+    q.bindValue(":lim", limit);
+    if (!q.exec()) {
+        qWarning() << "getClusterArticles failed:" << q.lastError().text();
+        return out;
+    }
+    while (q.next()) {
+        QVariantMap r;
+        r["title"]   = q.value(0);
+        r["summary"] = q.value(1);
+        out.push_back(r);
+    }
+    return out;
+}
+
+// --- ensureTopic(title) ---
+int DBManager::ensureTopic(const QString& title) {
+    // 1) попытка найти id по title
+    {
+        QSqlQuery s(db);
+        s.prepare(R"SQL(SELECT id FROM public.topic WHERE title = :t LIMIT 1)SQL");
+        s.bindValue(":t", title);
+        if (s.exec() && s.next()) return s.value(0).toInt();
+    }
+    // 2) вставка
+    QSqlQuery q(db);
+    q.prepare(R"SQL(
+        INSERT INTO public.topic (title)
+        VALUES (:t)
+        ON CONFLICT (title) DO UPDATE SET title = EXCLUDED.title
+        RETURNING id
+    )SQL");
+    q.bindValue(":t", title);
+    if (!q.exec() || !q.next()) {
+        qWarning() << "ensureTopic failed:" << q.lastError().text() << title;
+        return 0;
+    }
+    return q.value(0).toInt();
+}
+
+// --- очистка primary для кластера ---
+bool DBManager::clearClusterPrimary(int clusterId) {
+    QSqlQuery q(db);
+    q.prepare(R"SQL(
+        UPDATE public.clustertopic
+        SET "is_primary" = false
+        WHERE cluster_id = :cid AND "is_primary" = true
+    )SQL");
+    q.bindValue(":cid", clusterId);
+    if (!q.exec()) {
+        qWarning() << "clearClusterPrimary failed:" << q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+// --- UPSERT в cluster_topic ---
+bool DBManager::upsertClusterTopic(int clusterId, int topicId, double score, bool primary) {
+    QSqlQuery q(db);
+    q.prepare(R"SQL(
+        INSERT INTO public.clustertopic (cluster_id, topic_id, score, "is_primary")
+        VALUES (:c, :t, :s, :p)
+        ON CONFLICT (cluster_id, topic_id)
+        DO UPDATE SET score = EXCLUDED.score, "is_primary" = EXCLUDED."is_primary"
+    )SQL");
+    q.bindValue(":c", clusterId);
+    q.bindValue(":t", topicId);
+    q.bindValue(":s", score);
+    q.bindValue(":p", primary);
+    if (!q.exec()) {
+        qWarning() << "upsertClusterTopic failed:" << q.lastError().text();
+        return false;
+    }
+    return true;
 }

@@ -9,6 +9,14 @@
 #include <string>
 #include "config.hpp"
 
+struct ArticleInsertResult {
+    int   clusterId = 0;
+    int   articleId = 0;
+    double score    = 0.0;
+    bool  matched   = false;
+    bool  createdNew= false;
+};
+
 class DBManager {
 public:
     DBManager(const QString& driver = "QPSQL");
@@ -34,14 +42,17 @@ public:
 
     bool bumpSourcesLastUpdatedRange(int idFrom, int idTo, const QDateTime &ts);
 
-    QVector<int> insertArticles(const QList<QVariantMap> &rows);
-    // QVector<int> upsertArticlesBatch(const QList<QVariantMap> &rows);
-    // void insertArticle(const QString &url, const QString &urlCanon, const QString &title, const QString &summary, const QString &contentHtml, const QDateTime &publishedAt, const QString &language, const QString &contentFingerprint, int clusterId, int sourceId);
+    QVector<ArticleInsertResult> insertArticles(const QList<QVariantMap>& rows);
     QList<QVariantMap> listRssSourcesRange(int idFrom, int idTo);
+
+    QList<QVariantMap> getClusterArticles(int clusterId, int limit) const;
+    int  ensureTopic(const QString& title); // создаст при отсутствии и вернёт id
+    bool upsertClusterTopic(int clusterId, int topicId, double score, bool primary);
+    bool clearClusterPrimary(int clusterId);
 
     Config config;
 
 private:
     QSqlDatabase db;
-   
+   	void ensureTopicTitleUniqueIndex();
 };

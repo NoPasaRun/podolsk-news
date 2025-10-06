@@ -17,6 +17,8 @@ struct Source {
     std::string url;
 };
 
+class TopicAssigner;
+
 class ParseDaemon : public QObject {
     Q_OBJECT
 
@@ -41,4 +43,5 @@ private slots:
 private:
     QTimer timer;
     DBManager DBMg;
+    TopicAssigner* topicAssigner = nullptr;
 };

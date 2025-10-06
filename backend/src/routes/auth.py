@@ -7,7 +7,7 @@ from orm.models import User, PhoneOTP, Source, UserSource
 from schemes.auth import PhoneIn, VerifyIn, RefreshIn, TokenPair
 from settings import settings
 from utils.auth import make_token, gen_code, hash_code, decode_refresh_token
-from redis.asyncio import Redis
+from subscriber.asyncio import Redis
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])

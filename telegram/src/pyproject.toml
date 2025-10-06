@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "news-backend"
+version = "0.1.0"
+description = "Podolsk telegram parser"
+authors = ["Bogdan <bogdanbelenesku@gmail.com>"]
+packages = [{ include = "src" }]
+
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pydantic = "^2.7"
+pydantic-settings = "^2.2"
+telethon = "^1.36"
+redis = "^5.0.8"
+asyncpg = "^0.29"
+uvloop = "^0.19"
+
+[tool.pdm]

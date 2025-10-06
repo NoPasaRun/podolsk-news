@@ -53,8 +53,6 @@ class PhoneOTP(Model):
 class Source(Model):
     """
     kind задаёт тип источника (rss/html/jsonfeed/telegram).
-    parser_profile выбирает стратегию парсинга.
-    parse_overrides — ручные селекторы/правила для конкретного домена.
     """
     id = fields.IntField(pk=True)
     kind = fields.CharEnumField(SourceKind, max_length=16)

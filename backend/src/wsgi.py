@@ -12,7 +12,7 @@ from ws.source import source_ws
 from settings import settings
 
 from fastapi.openapi.utils import get_openapi
-from redis.asyncio import Redis, ConnectionPool
+from subscriber.asyncio import Redis, ConnectionPool
 
 from utils.redis import RedisBroker
 

@@ -18,7 +18,7 @@ export default function NewsCard({
   const image = [main, ...others].find(el => !!el.image)?.image;
 
   return (
-      <div className="border rounded-2xl p-4 bg-white dark:bg-neutral-900 shadow-sm flex flex-col justify-between">
+      <div className="border rounded-2xl p-4 bg-white dark:bg-neutral-900 shadow-sm flex flex-col justify-between overflow-hidden">
           <div>
               <div className="mb-2">
                   <a href={main.url} target="_blank" rel="noreferrer"

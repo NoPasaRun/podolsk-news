@@ -163,7 +163,7 @@ export default function SourceModal({ open, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="w-full max-w-4xl bg-white dark:bg-neutral-900 rounded-2xl shadow-xl p-4 md:p-6">
+      <div className="w-full max-w-4xl bg-white dark:bg-neutral-900 rounded-2xl shadow-xl p-4 md:p-6 max-h-[80%] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Источники</h2>
           <button className="px-3 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800" onClick={onClose}>Закрыть</button>

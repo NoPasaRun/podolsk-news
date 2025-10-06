@@ -10,3 +10,5 @@ parser/models/
 models/
 *.gguf
 config.json
+*.session
+*.session-journal

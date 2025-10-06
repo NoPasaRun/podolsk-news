@@ -49,6 +49,17 @@ services:
       redis:
         condition: service_started
 
+  telegram:
+    build: ./telegram
+    env_file: .env
+    volumes:
+      - ./telegram/src:/app/src:rw
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   frontend:
     build: ./frontend
     env_file: .env

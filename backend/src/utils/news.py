@@ -27,6 +27,7 @@ def apply_cluster_filters(
     if language:
         qs = qs.filter(language=language)
     if q:
+        language = language or "simple"
         q_lit = q.replace("'", "''")
         tsq = (
             "(SELECT ("

@@ -94,7 +94,7 @@ async def catalog_sources(
         ).values("id","source_id")
         connected_map = {l["source_id"]: l["id"] for l in links}
 
-    return [
+    return sorted([
         SourceCatalogItem(
             id=r.id, kind=r.kind, domain=r.domain, status=r.status,
             created_at=r.created_at.isoformat(),
@@ -102,7 +102,7 @@ async def catalog_sources(
             user_source_id=connected_map.get(r.id)
         )
         for r in rows
-    ]
+    ], key=lambda i: i.connected, reverse=True)
 
 
 @router.patch("/update/{user_source_id}", response_model=UserSourceOut)

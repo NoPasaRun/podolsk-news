@@ -3,7 +3,7 @@ import contextlib
 import json
 from typing import Dict, Set, Tuple
 
-from redis.asyncio import Redis
+from subscriber.asyncio import Redis
 
 
 Key = Tuple[int, int]  # (source_id, user_id)

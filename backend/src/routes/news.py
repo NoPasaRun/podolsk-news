@@ -53,7 +53,7 @@ async def list_articles_grouped(
 
     # фильтры
     topic_ids: Optional[List[int]] = Query(None),
-    language: Optional[Language] = Query(Language.RU),
+    language: Optional[Language] = Query(None),
     q: Optional[str] = Query(None, min_length=2),
     since: Optional[datetime] = Query(None),
     until: Optional[datetime] = Query(None),

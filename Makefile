@@ -22,7 +22,7 @@ ENV	?=	dev
 
 # -------- Phony targets --------
 .PHONY: dev-up dev-down logs-be sh-be sh-fe \
-        prod-up prod-down prod-logs fe-build logs-pa \
+        prod-up prod-down prod-logs fe-build logs-pa logs-tg \
         prod-nginx-disable prod-nginx-enable prod-nginx-cert ips
 
 # -------- ENV (docker nginx + vite) --------
@@ -40,6 +40,9 @@ logs-be:
 
 logs-pa:
 	docker compose logs -f parser
+
+logs-tg:
+	docker compose logs -f telegram
 
 sh-be:
 	docker compose exec backend bash

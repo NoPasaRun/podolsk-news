@@ -35,6 +35,7 @@ private:
     llama_model*   model_ = nullptr;
     llama_context* ctx_   = nullptr;
     const llama_vocab* vocab_ = nullptr;
+    uint32_t seq_counter_ = 0;  
 
     QString generate(const QString& prompt);
     static std::string toStd(const QString& s);

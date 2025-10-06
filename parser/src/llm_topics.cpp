@@ -41,6 +41,7 @@ bool LlmTopics::init(){
     llama_context_params cp = llama_context_default_params();
     cp.n_ctx     = opt_.n_ctx;
     cp.n_threads = opt_.n_threads;
+    cp.n_seq_max = 8;                  // 👈 разрешаем до 8 параллельных seq
     ctx_ = llama_init_from_model(model_, cp);
     if (!ctx_) return false;
 
@@ -54,65 +55,72 @@ void LlmTopics::destroy(){
     vocab_ = nullptr;
 }
 
-QString LlmTopics::generate(const QString& userPrompt){
-    // 1) Qwen chat template
-    QString chat =
+QString LlmTopics::generate(const QString& userPrompt) {
+    // --- чат-шаблон Qwen ---
+    const QString chat =
         "<|im_start|>system\n"
         "You are a strict JSON generator. Reply ONLY with one JSON object.\n"
         "<|im_end|>\n"
         "<|im_start|>user\n" + userPrompt + "\n<|im_end|>\n"
         "<|im_start|>assistant\n";
 
-    const std::string sp = toStd(chat);
+    // новый seq_id на каждый вызов (см. seq_counter_ и cp.n_seq_max в init)
+    const uint32_t sid = (seq_counter_++) % 8;
 
-    // 2) tokenize (для Qwen add_bos = false)
+    // --- токенизация ---
+    const std::string sp = toStd(chat);
+    // для Qwen: add_bos = false, special = true (чтобы <|im_start|> не порезались)
     int32_t need = llama_tokenize(vocab_, sp.c_str(), (int32_t)sp.size(),
                                   nullptr, 0, /*add_bos*/false, /*special*/true);
     if (need <= 0) return {};
 
     std::vector<llama_token> tok(need);
     llama_tokenize(vocab_, sp.c_str(), (int32_t)sp.size(),
-                   tok.data(), (int32_t)tok.size(), /*add_bos*/false, /*special*/true);
+                   tok.data(), (int32_t)tok.size(),
+                   /*add_bos*/false, /*special*/true);
 
+    // --- прогон промпта ---
     llama_batch b = llama_batch_init((int32_t)tok.size(), 0, 1);
     for (int i = 0; i < (int)tok.size(); ++i) {
         b.token[i]     = tok[i];
         b.pos[i]       = i;
         b.n_seq_id[i]  = 1;
-        b.seq_id[i][0] = 0;
-        b.logits[i]    = (i == (int)tok.size() - 1);
+        b.seq_id[i][0] = sid;                    // важное: свой seq
+        b.logits[i]    = (i == (int)tok.size()-1);
     }
     b.n_tokens = (int32_t)tok.size();
 
     if (llama_decode(ctx_, b) != 0) { llama_batch_free(b); return {}; }
     llama_batch_free(b);
-    int n_past = (int)tok.size();
 
+    // --- генерация ---
     QString out;
+    int n_past = (int)tok.size();
     const llama_token eos = llama_vocab_eos(vocab_);
-    const int min_tokens  = 8;             // не даём завершиться слишком рано
+    const int n_vocab = llama_vocab_n_tokens(vocab_);
+    const int min_tokens = 16;                  // подавляем ранний EOS
+
     for (int t = 0; t < opt_.max_tokens; ++t) {
         const float* logits = llama_get_logits_ith(ctx_, -1);
-        const int n_vocab = llama_vocab_n_tokens(vocab_);
+        if (!logits) break;
 
-        // выбираем лучшую НЕ-EOS, пока не набрали min_tokens
         int best = -1; float bestv = -1e30f;
         for (int i = 0; i < n_vocab; ++i) {
-            if (t < min_tokens && i == eos) continue;
+            if (t < min_tokens && i == (int)eos) continue;
             if (logits[i] > bestv) { bestv = logits[i]; best = i; }
         }
-        if (best == -1 || best == eos) break;
+        if (best == -1 || best == (int)eos) break;
 
-        const char* piece = llama_vocab_get_text(vocab_, best);
-        if (!piece) break;
-        out += QString::fromUtf8(piece);
+        if (const char* piece = llama_vocab_get_text(vocab_, best)) {
+            out += QString::fromUtf8(piece);
+        }
         if (out.contains('}')) break;
 
         llama_batch one = llama_batch_init(1, 0, 1);
         one.token[0]     = best;
         one.pos[0]       = n_past;
         one.n_seq_id[0]  = 1;
-        one.seq_id[0][0] = 0;
+        one.seq_id[0][0] = sid;
         one.logits[0]    = true;
         one.n_tokens     = 1;
 
@@ -121,12 +129,10 @@ QString LlmTopics::generate(const QString& userPrompt){
         llama_batch_free(one);
     }
 
-    // на всякий случай
-    if (out.trimmed().isEmpty()) {
-        qWarning() << "[LLM] empty generation after decode";
-    }
     return out;
 }
+
+
 
 QVector<ScoredLabel> LlmTopics::scoreLabels(const QString& text,
                                             const QStringList& labels,

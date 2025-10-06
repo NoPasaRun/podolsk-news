@@ -277,7 +277,6 @@ export default function SourceModal({ open, onClose }) {
                   <option value="">Выберите тип…</option>
                   <option value="rss">RSS</option>
                   <option value="telegram">TG</option>
-                  <option value="json">API</option>
                 </select>
               </div>
             </div>

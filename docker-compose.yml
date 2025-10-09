@@ -36,6 +36,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    networks:
+      default:
+        ipv4_address: 172.15.0.4
 
   backend:
     build: ./backend

@@ -18,9 +18,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 add_compile_options(-Wno-multichar)
 
 # --- мини-скачивалка GGUF без лишних плясок ---
-set(MODELS_DIR "${CMAKE_SOURCE_DIR}/models")
+set(MODELS_DIR "${CMAKE_SOURCE_DIR}/res")
 set(MODEL_FILE "qwen2.5-0.5b-instruct-q4_k_m.gguf")
-set(MODEL_URL  "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/${MODEL_FILE}")
+set(MODEL_URL  "https://modelscope.cn/api/v1/models/qwen/Qwen2.5-0.5B-Instruct-GGUF/repo?Revision=master&FilePath=${MODEL_FILE}")
 set(MODEL_PATH "${MODELS_DIR}/${MODEL_FILE}")
 
 file(MAKE_DIRECTORY "${MODELS_DIR}")

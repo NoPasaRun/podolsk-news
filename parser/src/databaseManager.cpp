@@ -2,8 +2,8 @@
 #include <QRegularExpression>
 #include <QDebug>
 
-DBManager::DBManager(const QString& driver) {
-    db = QSqlDatabase::addDatabase(driver, "pg_conn");
+DBManager::DBManager(const QString& conn_name, const QString& driver) {
+    db = QSqlDatabase::addDatabase(driver, conn_name);
     
 }
 
@@ -152,7 +152,7 @@ QVector<ArticleInsertResult> DBManager::insertArticles(const QList<QVariantMap>&
             p_summary       => :p_summary,
             p_published_at  => :p_published_at,
             p_language      => :p_language,
-            p_recency       => '3 days',
+            p_recency       => '1 hour',
             p_min_score     => 0.2
         )
     )SQL");

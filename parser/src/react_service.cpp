@@ -93,14 +93,14 @@ void ReactService::onRedisMessage(const QString& channel, const QByteArray& payl
 
     // дергаем существующую логику демона — БЕЗ дублирования кода
     QString err;
-    const bool ok = daemon_.parseOneSourceById(sourceId, &err);
+    bool ok = daemon_.parseOneSourceById(sourceId, &err);
 
     if (ok) {
-        daemon_.setSourceStatus(sourceId, "active");
         publishStatus(sourceId, userId, "active");
+        daemon_.setSourceStatus(sourceId, "active");
     } else {
-        daemon_.setSourceStatus(sourceId, "error");
         publishStatus(sourceId, userId, "error", err);
+        daemon_.setSourceStatus(sourceId, "error");
     }
 }
 

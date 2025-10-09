@@ -1,18 +1,19 @@
 import asyncio
 import contextlib
 import json
-from typing import Dict, Set, Tuple
+from typing import Dict, Set, Tuple, Dict
 
 from redis.asyncio import Redis
 
+from utils.enums import SourceKind
 
 Key = Tuple[int, int]  # (source_id, user_id)
 
 
 class RedisBroker:
-    def __init__(self, url: str, in_channel: str, out_channel: str):
+    def __init__(self, url: str, in_channels: Dict, out_channel: str):
         self._url = url
-        self._in = in_channel
+        self._in = in_channels
         self._out = out_channel
 
         self._pub: Redis | None = None
@@ -69,9 +70,9 @@ class RedisBroker:
                 await self._sub.aclose()
             self._sub = None
 
-    async def publish_in(self, payload: dict) -> None:
+    async def publish_in(self, payload: dict, type_: SourceKind) -> None:
         assert self._pub is not None, "Broker not started"
-        await self._pub.publish(self._in, json.dumps(payload))
+        await self._pub.publish(self._in.get(type_), json.dumps(payload))
 
     async def register(self, key: Key, max_queue: int = 100) -> asyncio.Queue:
         """Регистрирует слушателя и возвращает его очередь сообщений."""

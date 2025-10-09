@@ -169,7 +169,7 @@ export default function SourceModal({ open, onClose }) {
           <button className="px-3 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800" onClick={onClose}>Закрыть</button>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 flex-wrap">
           {['mine','catalog','custom'].map(k => (
             <button
               key={k}

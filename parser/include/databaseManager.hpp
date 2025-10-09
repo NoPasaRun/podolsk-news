@@ -19,7 +19,7 @@ struct ArticleInsertResult {
 
 class DBManager {
 public:
-    DBManager(const QString& driver = "QPSQL");
+    DBManager(const QString& conn_name, const QString& driver = "QPSQL");
     ~DBManager();
 
 

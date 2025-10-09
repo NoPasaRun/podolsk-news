@@ -66,6 +66,7 @@ export function useWebsocket({ wsPath = "/ws/", onMessage }) {
     ws.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
+        console.log(data)
         onMessage && onMessage(data);
       } catch {}
     };

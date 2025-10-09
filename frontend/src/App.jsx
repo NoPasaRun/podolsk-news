@@ -9,6 +9,7 @@ import SourceModal from "./components/widgets/SourceModal";
 import Alert from "./components/widgets/Alert";
 import { useFilters } from "./hooks/news/useFilters";
 import { TelemetryProvider } from "./telemetry/TelemetryProvider";
+import DotBouncer from "@/components/widgets/DotBouncer.jsx";
 
 export default function App() {
   const [news, setNews] = useState([])
@@ -74,11 +75,13 @@ export default function App() {
     if (!cursor) return;
 
     setIsBottom(false)
+    setLoading(true);
     const url = buildUrl("/news/all", filters, { cursor });
     api.get(url)
       .then(r => r.json().then(data => {
         setNews((prev) => [...prev, ...(data?.items || [])]);
         setCursor(data?.next_cursor || null);
+        setLoading(false);
       }))
       .catch(() => setErrorOpen(true));
   }, [isBottom, cursor, api, filters, buildUrl]);
@@ -97,7 +100,7 @@ export default function App() {
         }}
       >
         <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-          <header className="flex justify-between items-center px-6 py-4 shadow bg-white dark:bg-gray-800">
+          <header className="flex justify-between items-center px-6 py-4 shadow bg-white dark:bg-gray-800 flex-wrap">
             <h1 className="text-2xl font-bold">📰 Новости</h1>
             <div className="flex items-center gap-3">
               <ThemeToggle theme={theme} setTheme={setTheme}/>
@@ -132,7 +135,8 @@ export default function App() {
               </div>
             )}
 
-            {!loading && !isErrorOpen && <NewsList items={news} />}
+            {!isErrorOpen && <NewsList items={news} />}
+            {loading && <DotBouncer />}
           </main>
 
           <SourceModal open={source} onClose={()=>setSource(false)} />

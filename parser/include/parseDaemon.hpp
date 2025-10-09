@@ -23,14 +23,16 @@ class ParseDaemon : public QObject {
     Q_OBJECT
 
 public:
-    explicit ParseDaemon(QObject* parent = nullptr);
+    explicit ParseDaemon(const QString& conn_name, QObject* parent = nullptr);
     ~ParseDaemon();
 
     bool parseOneSourceById(int sourceId, QString* errorOut = nullptr);
     bool setSourceStatus(int sourceId, const QString& status);
 
-    void start();
-
+public slots:
+	void start();
+	void stop();
+	void openDB();
 private slots:
     void tick();
     void parceSources(const QList<QVariantMap>& sources);
@@ -41,7 +43,7 @@ private slots:
     QString languageCheck(QStringView text);
     friend QDateTime parsePublishedAtUtc(const struct feedpp::item& it);
 private:
-    QTimer timer;
     DBManager DBMg;
+    QTimer* timer_ = nullptr;
     TopicAssigner* topicAssigner = nullptr;
 };

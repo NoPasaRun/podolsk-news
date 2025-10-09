@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     app.state.redis = Redis(connection_pool=pool)
     app.state.broker = RedisBroker(
         url=settings.redis.url,
-        in_channel=settings.redis.in_channel,
+        in_channels=settings.redis.channels,
         out_channel=settings.redis.out_channel,
     )
     await app.state.broker.start()

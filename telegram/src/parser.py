@@ -19,17 +19,17 @@ async def crawl_once(pool: asyncpg.Pool, client: TelegramClient, fetch_limit: in
     for source_id, domain in sources:
         handle = normalize_handle(domain or "")
         if not handle:
-            print("Источник id=%s: некорректный domain='%s'", source_id, domain)
+            print(f"Источник id={source_id}: некорректный domain='{domain}'")
             continue
 
         try:
             entity = await client.get_entity(handle)
         except errors.FloodWaitError as e:
-            print("FloodWait %ss get_entity(%s)", e.seconds, handle)
+            print(f"FloodWait {e.seconds}s get_entity({handle})")
             await asyncio.sleep(e.seconds + 1)
             continue
         except Exception as e:
-            print("get_entity(%s) ошибка: %s", handle, e)
+            print(f"get_entity({handle}) ошибка: {e}")
             continue
 
         processed = 0
@@ -60,14 +60,14 @@ async def crawl_once(pool: asyncpg.Pool, client: TelegramClient, fetch_limit: in
                         )
                         processed += 1
                 except Exception as e:
-                    print("upsert failed (%s/%s): %s", handle, m.id, e)
+                    print(f"upsert failed ({handle}/{m.id}): {e}")
         except errors.FloodWaitError as e:
-            print("FloodWait %ss iter_messages(%s)", e.seconds, handle)
+            print(f"FloodWait {e.seconds}s iter_messages({handle})")
             await asyncio.sleep(e.seconds + 1)
         except Exception as e:
-            print("iter_messages(%s) ошибка: %s", handle, e)
+            print(f"iter_messages({handle}) ошибка: {e}")
 
-        print("Источник id=%s @%s: обработано %s", source_id, handle, processed)
+        print(f"Источник id={source_id} @{handle}: обработано {processed}")
         await asyncio.sleep(0.5)
 
 

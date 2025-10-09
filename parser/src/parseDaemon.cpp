@@ -1,30 +1,42 @@
 #include "parseDaemon.hpp"
 #include "topic_assigner.hpp"
 #include <QDebug>
+#include <QString>
 #include <QtSql/QSqlError>
 
 constexpr int BATCH_SIZE = 50;  //По сколько закидывать новостей в бдшку
 
-ParseDaemon::ParseDaemon(QObject* parent) : QObject(parent) {
-    connect(&timer, &QTimer::timeout, this, &ParseDaemon::tick);
-    
-}
+ParseDaemon::ParseDaemon(const QString& conn_name, QObject* parent) : QObject(parent), DBMg(conn_name) {}
 
 ParseDaemon::~ParseDaemon() {
+    if (timer_) { timer_->stop(); timer_->deleteLater(); timer_ = nullptr; }
     delete topicAssigner; topicAssigner = nullptr;
     feedpp::parser::global_cleanup();
+}
+
+void ParseDaemon::openDB() {
+	DBMg.open();
 }
 
 
 void ParseDaemon::start() {
     feedpp::parser::global_init();
-    DBMg.open();
+    openDB();
     topicAssigner = new TopicAssigner(DBMg);
-    timer.start(DBMg.config.lazy_time * 1000); //в лази тайм надо указать время в секундах
+
+    if (!timer_) {
+        timer_ = new QTimer(this);
+        connect(timer_, &QTimer::timeout, this, &ParseDaemon::tick, Qt::QueuedConnection);
+    }
+    timer_->start(DBMg.config.lazy_time * 1000);
+
     DBMg.demoData();
-    tick(); // сразу первый запуск
+    QMetaObject::invokeMethod(this, "tick", Qt::QueuedConnection);
 }
 
+void ParseDaemon::stop() {
+    if (timer_) timer_->stop();
+}
 
 QString ParseDaemon::languageCheck(QStringView text)
 {
@@ -90,25 +102,16 @@ QDateTime parsePublishedAtUtc(const feedpp::item& it) {
     return QDateTime::currentDateTimeUtc();
 }
 
-static int ticks = 0;
-
 void ParseDaemon::tick() {
     qDebug() << "tick";
 
-    for (;;) // КОРОЧЕ ЦИКЛА ТУТ НЕ ПРОИСХОДИТ, СНИЗУ БРИК А СУРСЫ МЫ ПОЛУЧАЕМ ВСЕ
-    {
-        
-        const QList<QVariantMap> sources = DBMg.listRssSourcesRange(0, 100000);
-        DBMg.bumpSourcesLastUpdatedRange(0, 100000, QDateTime::currentDateTimeUtc());
-        if (sources.isEmpty()) {
-            qDebug() << "No RSS sources";
-            return;
-        }
-
-        parceSources(sources);
-
-        break;
-    }
+	const QList<QVariantMap> sources = DBMg.listRssSourcesRange(0, 100000);
+	DBMg.bumpSourcesLastUpdatedRange(0, 100000, QDateTime::currentDateTimeUtc());
+	if (sources.isEmpty()) {
+		qDebug() << "No RSS sources";
+		return;
+	}
+	parceSources(sources);
 }
 
 void ParseDaemon::parceSources(const QList<QVariantMap> &sources)
@@ -142,7 +145,6 @@ bool ParseDaemon::parseOneSourceWithParser(feedpp::parser& p,
 
         // будем копить затронутые кластеры
         QSet<int> touchedClusters;
-
         for (const auto &it : f.items) {
             const QDateTime feedPublishedAt = parsePublishedAtUtc(it);
             if (lastUpdate.isValid() && !(feedPublishedAt > lastUpdate)) {
@@ -169,6 +171,7 @@ bool ParseDaemon::parseOneSourceWithParser(feedpp::parser& p,
                 batch.clear();
             }
         }
+
         if (!batch.isEmpty()) {
             auto res = DBMg.insertArticles(batch);
             for (const auto& r : res) if (r.clusterId > 0) touchedClusters.insert(r.clusterId);

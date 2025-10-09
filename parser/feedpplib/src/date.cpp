@@ -75,7 +75,7 @@ std::string date::format(const std::string& date)
     }
     else
     {
-        LOG_ERROR("date::format() failed to proccess the date.");
+        // LOG_ERROR("date::format() failed to proccess the date.");
         return ret;
     }
 

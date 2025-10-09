@@ -24,7 +24,7 @@ WHERE id = $1;
 
 UPSERT_SQL = """
 SELECT *
-FROM upsert_article_with_cluster($1, $2, $3, $4, $5, $6, $7);
+FROM upsert_article_with_cluster($1, $2, $3, $4, $5, $6, $7, p_recency := interval '1 hour');
 """
 
 

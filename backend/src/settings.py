@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
+from utils.enums import SourceKind
+
 # ---------- APP ----------
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
@@ -44,8 +46,13 @@ class OTPSettings(BaseSettings):
 
 class RedisSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
-    in_channel: str = Field(..., alias="REDIS_IN_CHANNEL")
+    tg_in_channel: str = Field(..., alias="TG_IN_CHANNEL")
+    rss_in_channel: str = Field(..., alias="RSS_IN_CHANNEL")
     out_channel: str = Field(..., alias="REDIS_OUT_CHANNEL")
+
+    @property
+    def channels(self):
+        return {SourceKind.RSS: self.rss_in_channel, SourceKind.TELEGRAM: self.tg_in_channel}
 
     @property
     def url(self):

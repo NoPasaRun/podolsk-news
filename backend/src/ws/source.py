@@ -24,9 +24,7 @@ async def send_source_on_check(ws: WebSocket, json_text: str):
     if (source := await Source.get_or_none(id=source_id, status=SourceStatus.ERROR)) is None:
         return await ws.send_json({"type": "error", "error": "source_not_found", "source_id": source_id})
 
-    source.status = SourceStatus.VALIDATING
-    await source.save()
-    await broker.publish_in({"source_id": source_id, "user_id": user.id})
+    await broker.publish_in({"source_id": source_id, "user_id": user.id}, source.kind)
     await ws.send_json({"status": SourceStatus.VALIDATING, "source_id": source_id})
 
     return source_id, user.id

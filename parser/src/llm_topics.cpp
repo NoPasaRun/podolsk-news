@@ -7,6 +7,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <unistd.h>
+#include <QDebug>
 
 // llama.cpp C API (новый)
 #include "llama.h"
@@ -249,10 +250,6 @@ std::vector<TopicScore> LlmTopics::classify(
 	if (raw.empty()) {
 		raw = run(makePlainPrompt(text, topics), 256);
 	}
-
-	fprintf(stderr, "[LlmTopics] RAW: %s\n", raw.c_str());
-	fflush(stderr);
-
 	if (raw.empty()) return {};
 
 	// выкусываем JSON между { ... }

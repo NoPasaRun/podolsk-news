@@ -208,7 +208,5 @@ void TopicAssigner::assignForClusters(const QSet<int>& clusterIds) {
 			db_.upsertClusterTopic(cid, topicId, ts.score, primary);
 			++rank;
 		}
-
-        qInfo() << "[TopicAssigner] cluster" << cid << "topics assigned";
     }
 }

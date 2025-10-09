@@ -6,7 +6,9 @@ podolsk-news.conf
 dist
 */build
 # models
+parser/models/
+models/
 *.gguf
+config.json
 *.session
 *.session-journal
-config.json

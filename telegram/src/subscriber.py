@@ -23,6 +23,7 @@ async def verify_source(pool: asyncpg.Pool, client: TelegramClient, source_id: i
       - при временной ошибке -> БД не трогаем
     """
     async with pool.acquire() as conn:
+        await update_source_status(conn, source_id, "validating")
         src = await get_source_by_id(conn, source_id)
         if not src:
             return "error", "source_not_found"
@@ -80,12 +81,8 @@ async def redis_listener(pool: asyncpg.Pool, redis: Redis, client: TelegramClien
             try:
                 payload = json.loads(raw)
             except Exception:
-                # если прилетела строка "123:456" — поддержим и такой формат
-                try:
-                    s_id, u_id = str(raw).split(":", 1)
-                    payload = {"source_id": int(s_id), "user_id": int(u_id)}
-                except Exception:
-                    payload = {}
+                await asyncio.sleep(0.1)
+                continue
 
             source_id = payload.get("source_id")
             user_id = payload.get("user_id")
@@ -97,6 +94,7 @@ async def redis_listener(pool: asyncpg.Pool, redis: Redis, client: TelegramClien
 
             status, err = await verify_source(pool, client, source_id)
             out = {"source_id": source_id, "user_id": user_id, "status": status, "error": err}
+            print("ok")
             await redis.publish(settings.redis_out_channel, json.dumps(out, ensure_ascii=False))
     finally:
         await pubsub.unsubscribe(settings.redis_in_channel)

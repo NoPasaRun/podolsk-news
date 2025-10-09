@@ -61,6 +61,7 @@ async def list_articles_grouped(
     # выборка внутри кластера
     max_articles_per_cluster: int = Query(6, ge=1, le=11),
     order_in_cluster: Literal["date_desc", "date_asc"] = "date_desc",
+    bookmarkOnly: bool = Query(False),
 
     # сортировка/пагинация кластеров
     sort: Literal["recent", "weight"] = "recent",
@@ -78,7 +79,9 @@ async def list_articles_grouped(
         cqs,
         topic_ids=topic_ids,
         language=language,
-        q=q
+        q=q,
+        bookmarkOnly=bookmarkOnly,
+        user=user
     )
 
     # 1.1) Аннотация "последней публикации" по моим источникам
@@ -109,7 +112,7 @@ async def list_articles_grouped(
         since=since,
         until=until,
         order_in_cluster=order_in_cluster,
-        max_articles_per_cluster=max_articles_per_cluster,
+        max_articles_per_cluster=max_articles_per_cluster
     )
 
     # 3) Кластерные флаги (bookmarked/read) и ранги источников

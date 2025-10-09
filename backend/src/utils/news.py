@@ -21,7 +21,11 @@ def apply_cluster_filters(
     topic_ids: Optional[List[str]],
     language: Optional[Language],
     q: Optional[str],
+    bookmarkOnly: bool,
+    user: User
 ):
+    if user and bookmarkOnly:
+        qs = qs.filter(user_states__bookmarked=True, user_states__user__id=user.id)
     if topic_ids:
         qs = qs.filter(cluster_topics__topic_id__in=topic_ids)
     if language:
@@ -78,7 +82,7 @@ async def fetch_articles_for_clusters(
     since: Optional[datetime],
     until: Optional[datetime],
     order_in_cluster: Literal["date_desc", "date_asc"],
-    max_articles_per_cluster: int,
+    max_articles_per_cluster: int
 ) -> Dict[int, List[dict]]:
     qs = Article.filter(cluster_id__in=cluster_ids, source_id__in=allowed_source_ids).prefetch_related("source")
     if since:

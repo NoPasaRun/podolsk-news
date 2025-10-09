@@ -9,7 +9,9 @@ import SourceModal from "./components/widgets/SourceModal";
 import Alert from "./components/widgets/Alert";
 import { useFilters } from "./hooks/news/useFilters";
 import { TelemetryProvider } from "./telemetry/TelemetryProvider";
-import DotBouncer from "@/components/widgets/DotBouncer.jsx";
+import DotBouncer from "./components/widgets/DotBouncer.jsx";
+import ScrollToTopButton from './components/widgets/AnchorScroll'
+
 
 export default function App() {
   const [news, setNews] = useState([])
@@ -60,14 +62,28 @@ export default function App() {
     document.documentElement.classList.toggle('dark', saved === 'dark')
   }, [])
 
-  const handleScroll = () => {
-    const { scrollTop, clientHeight, scrollHeight } = document.documentElement;
-    if (scrollTop + clientHeight >= scrollHeight) {
-      setIsBottom(true);
-    } else {
-      setIsBottom(false);
-    }
-  };
+  useEffect(() => {
+    let timeout;
+    
+    const handleScroll = () => {
+      clearTimeout(timeout); // сбрасываем предыдущий таймер
+      timeout = setTimeout(() => {
+        const scrollTop = window.scrollY || document.body.scrollTop;
+        const clientHeight = window.innerHeight;
+        const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+
+        if (Math.ceil(scrollTop) + clientHeight >= scrollHeight) {
+          setIsBottom(true);
+        }
+      }, 200); // дебаунс через 200мс
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   // бесконечная прокрутка (берёт те же фильтры + cursor)
   useEffect(() => {
@@ -85,11 +101,6 @@ export default function App() {
       }))
       .catch(() => setErrorOpen(true));
   }, [isBottom, cursor, api, filters, buildUrl]);
-
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   return (
       <TelemetryProvider
@@ -137,6 +148,7 @@ export default function App() {
 
             {!isErrorOpen && <NewsList items={news} />}
             {loading && <DotBouncer />}
+            <ScrollToTopButton />
           </main>
 
           <SourceModal open={source} onClose={()=>setSource(false)} />

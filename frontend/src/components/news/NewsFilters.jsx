@@ -5,7 +5,7 @@ import DateTimeInput from "@/components/ui/DateTimeInput";
 
 
 export default function NewsFilters({ api, state, set, onReset }) {
-  const { topicIds, language, q, since, until, orderInCluster, sort } = state;
+  const { topicIds, language, q, since, until, orderInCluster, bookmarkOnly, sort } = state;
 
   // опции тем
   const [topics, setTopics] = useState([]);
@@ -93,7 +93,7 @@ export default function NewsFilters({ api, state, set, onReset }) {
       </div>
 
       {/* Свитчи и сброс */}
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
+      <div className="mt-3 grid gap-3 md:grid-cols-2 sm:grid-cols-1">
         <div className="flex items-center gap-4">
           <span className="text-xs opacity-70 min-w-36">Порядок в кластере:</span>
           <Switch
@@ -111,6 +111,16 @@ export default function NewsFilters({ api, state, set, onReset }) {
             onChange={(v) => set.setSort(v ? "weight" : "recent")}
             label={sortByWeight ? "по весу" : "по времени"}
             hint="Основная сортировка ленты"
+          />
+        </div>
+
+        <div className="flex items-center gap-4">
+          <span className="text-xs opacity-70 min-w-36">Избранное:</span>
+          <Switch
+            checked={bookmarkOnly}
+            onChange={(v) => set.setBookmarkOnly(v)}
+            label={bookmarkOnly ? "Только избранное" : "Все"}
+            hint="Фильтрация по избранным новостям"
           />
         </div>
 

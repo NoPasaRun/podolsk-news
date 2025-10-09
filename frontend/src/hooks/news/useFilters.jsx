@@ -20,7 +20,7 @@ function getInitialFromLocation() {
     q: sp.get("q") || "",
     since: sp.get("since") || "",
     until: sp.get("until") || "",
-    // прячем в UI, но держим значения
+    bookmarkOnly: Boolean(Number(sp.get("bookmarkOnly"))),
     max_articles_per_cluster: Number(sp.get("max_articles_per_cluster")) || 10,
     order_in_cluster: sp.get("order_in_cluster") === "date_asc" ? "date_asc" : "date_desc",
     sort: sp.get("sort") === "weight" ? "weight" : "recent",
@@ -43,6 +43,7 @@ export function useFilters() {
   const [orderInCluster, setOrderInCluster] = useState(initial.order_in_cluster);
   const [sort, setSort] = useState(initial.sort);
   const [limit, setLimit] = useState(initial.limit);
+  const [bookmarkOnly, setBookmarkOnly] = useState(initial.bookmarkOnly);
 
   const qDebounced = useDebounce(q, 500);
 
@@ -59,9 +60,10 @@ export function useFilters() {
     sp.set("order_in_cluster", orderInCluster);
     sp.set("sort", sort);
     sp.set("limit", String(limit));
+    sp.set("bookmarkOnly", String(Number(bookmarkOnly)))
 
     return sp;
-  }, [topicIds, language, qDebounced, since, until, maxPerCluster, orderInCluster, sort, limit]);
+  }, [topicIds, language, qDebounced, since, until, maxPerCluster, orderInCluster, sort, limit, bookmarkOnly]);
 
   const filters = useMemo(() => {
     const s = searchParams.toString();
@@ -83,12 +85,13 @@ export function useFilters() {
     setOrderInCluster("date_desc");
     setSort("recent");
     setLimit(20);
+    setBookmarkOnly(false);
   }, []);
 
   return {
     filters,
-    state: { topicIds, language, q, since, until, orderInCluster, sort },
-    set: { setTopicIds, setLanguage, setQ, setSince, setUntil, setOrderInCluster, setSort },
+    state: { topicIds, language, q, since, until, orderInCluster, sort, bookmarkOnly },
+    set: { setTopicIds, setLanguage, setQ, setSince, setUntil, setOrderInCluster, setSort, setBookmarkOnly },
     reset,
   };
 }

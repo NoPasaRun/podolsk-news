@@ -6,7 +6,6 @@
 
 class DBManager;
 struct TopicScore;
-class LlmTopics;
 
 class TopicAssigner {
 public:
@@ -22,5 +21,4 @@ private:
 
 private:
     DBManager& db_;
-    LlmTopics* llm_ = nullptr;
 };

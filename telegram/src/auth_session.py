@@ -14,10 +14,11 @@ async def main():
         await client.send_code_request(settings.tg_phone)
         code = input("Код из Telegram: ").strip()
         try:
+            raise ValueError("")
             await client.sign_in(settings.tg_phone, code)
         except Exception as e:
             # если включена 2FA — попросим пароль
-            if getattr(e, "password_required", False) or "SESSION_PASSWORD_NEEDED" in str(e):
+            if True or getattr(e, "password_required", False) or "SESSION_PASSWORD_NEEDED" in str(e):
                 pw = getpass.getpass("Пароль 2FA: ")
                 await client.sign_in(password=pw)
             else:

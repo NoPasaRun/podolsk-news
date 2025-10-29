@@ -1,5 +1,4 @@
 #include "topic_assigner.hpp"
-#include "llm_topics.hpp"
 #include "databaseManager.hpp"
 #include <QVariantMap>
 #include <QDebug>
@@ -129,13 +128,10 @@ static std::vector<std::pair<QString,double>> heuristicTopicsFromText(const QStr
 }
 
 TopicAssigner::TopicAssigner(DBManager& db) : db_(db) {
-    llm_ = new LlmTopics();
-    if (!llm_->init("")) {
-        qWarning() << "[TopicAssigner] LLM init failed (check LLM_MODEL_PATH)";
-    }
+
 }
 
-TopicAssigner::~TopicAssigner() { delete llm_; }
+TopicAssigner::~TopicAssigner() {  }
 
 std::vector<std::string> TopicAssigner::topicList() const {
     // Можно вынести в конфиг
@@ -167,46 +163,41 @@ std::string TopicAssigner::buildClusterText(int clusterId, int limitArticles) {
 }
 
 void TopicAssigner::assignForClusters(const QSet<int>& clusterIds) {
-    if (!llm_) return;
-    const auto labels = topicList();
 
     for (int cid : clusterIds) {
-        const std::string ctx = buildClusterText(cid, 6);
-        if (ctx.empty()) continue;
+        // Соберём компактный текст из статей кластера
+        const QList<QVariantMap> arts = db_.getClusterArticles(cid, 6);
+        QString t;
+        for (const auto& a : arts) {
+            if (!a.value("title").toString().isEmpty())
+                t += a.value("title").toString() + " ";
+            if (!a.value("summary").toString().isEmpty())
+                t += a.value("summary").toString() + " ";
+        }
+        
+        // Получаем темы через эвристику
+        const auto heurScores = heuristicTopicsFromText(t);
+        
+        // Если ничего не нашли — скипаем
+        if (heurScores.empty()) continue;
 
-        auto scores = llm_->classify(ctx, labels, /*topK*/3, /*minScore*/0.15);
-
-        // если пусто — скипаем, без мусора
-		if (scores.empty()) {
-			// соберём компактный текст из статей кластера
-			const QList<QVariantMap> arts = db_.getClusterArticles(cid, 6);
-			QString t;
-			for (const auto& a : arts) {
-				if (!a.value("title").toString().isEmpty())
-					t += a.value("title").toString() + " ";
-				if (!a.value("summary").toString().isEmpty())
-					t += a.value("summary").toString() + " ";
-			}
-			const auto heur = heuristicTopicsFromText(t);
-			for (auto &h : heur) {
-				const QString canon = canonicalizeTopic(h.first);
-				if (canon.isEmpty()) continue;
-				scores.push_back({ canon.toStdString(), std::min(1.0, std::max(0.0, h.second)) });
-			}
-		}
-
-        // апдейт в БД
+        // Апдейт в БД
         // 1) очищаем primary у кластера
-		db_.clearClusterPrimary(cid);
-		int rank = 0;
-		for (auto &ts : scores) {
-			const QString canon = canonicalizeTopic(QString::fromStdString(ts.title));
-			if (canon.isEmpty()) continue;
-			int topicId = db_.ensureTopic(canon);
-			if (topicId <= 0) continue;
-			const bool primary = (rank == 0);
-			db_.upsertClusterTopic(cid, topicId, ts.score, primary);
-			++rank;
-		}
+        db_.clearClusterPrimary(cid);
+        
+        int rank = 0;
+        for (const auto &h : heurScores) {
+            const QString canon = canonicalizeTopic(h.first);
+            if (canon.isEmpty()) continue;
+            
+            int topicId = db_.ensureTopic(canon);
+            if (topicId <= 0) continue;
+            
+            const bool primary = (rank == 0);
+            const double score = std::min(1.0, std::max(0.0, h.second));
+            
+            db_.upsertClusterTopic(cid, topicId, score, primary);
+            ++rank;
+        }
     }
 }
